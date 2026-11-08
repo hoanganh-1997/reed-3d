@@ -15,8 +15,8 @@ export interface Backend {
   signUp(email: string, password: string): Promise<{ needsConfirm: boolean }>;
   signOut(): Promise<void>;
   getState(): Promise<PlayerState>;
-  unlockTank(tierId: string): Promise<PlayerState>;
-  selectTank(tankId: string): Promise<PlayerState>;
+  /** Shop: upgrade the player's single tank to a bigger tier (server checks level + coins). */
+  upgradeTank(tierId: string): Promise<PlayerState>;
   feedTank(tankId: string): Promise<PlayerState>;
   changeWater(tankId: string): Promise<PlayerState>;
 }
@@ -87,8 +87,7 @@ class SupabaseBackend implements Backend {
   }
 
   getState() { return this.rpc('get_state'); }
-  unlockTank(tierId: string) { return this.rpc('unlock_tank', { p_tier_id: tierId }); }
-  selectTank(tankId: string) { return this.rpc('select_tank', { p_tank_id: tankId }); }
+  upgradeTank(tierId: string) { return this.rpc('upgrade_tank', { p_tier_id: tierId }); }
   feedTank(tankId: string) { return this.rpc('feed_tank', { p_tank_id: tankId }); }
   changeWater(tankId: string) { return this.rpc('change_water', { p_tank_id: tankId }); }
 }
@@ -102,7 +101,7 @@ class DemoBackend implements Backend {
     const now = new Date().toISOString();
     const tankId = 'demo-tank-' + data.settings.starter_tier;
     this.state = {
-      profile: { user_id: 'demo', level, xp: 0, xp_to_next: 100, coins: 100, gems: 5, active_tank_id: tankId },
+      profile: { user_id: 'demo', level, xp: 0, xp_to_next: 100, coins: Number(new URLSearchParams(location.search).get('demoCoins') ?? 100), gems: 5, active_tank_id: tankId },
       tanks: [{ id: tankId, tier_id: data.settings.starter_tier, food: 62, cleanliness: 81, health: 92, last_tick_at: now }],
       fish: data.species.filter((s) => s.starter).map((s, i) => ({ id: 'demo-fish-' + i, tank_id: tankId, species_id: s.id })),
       server_time: now,
@@ -122,20 +121,16 @@ class DemoBackend implements Backend {
   signOut() { return Promise.resolve(); }
   getState() { return this.snap(); }
 
-  unlockTank(tierId: string) {
+  upgradeTank(tierId: string) {
     const tier = this.data.tiers.find((t) => t.id === tierId);
     if (!tier) return Promise.reject(new GameError('unknown_tier', 'unknown_tier'));
+    const tank = this.state.tanks.find((t) => t.id === this.state.profile.active_tank_id)!;
+    const cur = this.data.tiers.find((t) => t.id === tank.tier_id)!;
+    if (tier.sort_order <= cur.sort_order) return Promise.reject(new GameError('not_an_upgrade', 'not_an_upgrade'));
     if (this.state.profile.level < tier.unlock_level) return Promise.reject(new GameError('level_too_low', 'level_too_low'));
-    if (this.state.tanks.some((t) => t.tier_id === tierId)) return Promise.reject(new GameError('already_unlocked', 'already_unlocked'));
-    const id = 'demo-tank-' + tierId;
-    this.state.tanks.push({ id, tier_id: tierId, food: 80, cleanliness: 100, health: 100, last_tick_at: new Date().toISOString() });
-    this.data.species.filter((s) => s.starter).forEach((s, i) => this.state.fish.push({ id: `${id}-fish-${i}`, tank_id: id, species_id: s.id }));
-    this.state.profile.active_tank_id = id;
-    return this.snap();
-  }
-
-  selectTank(tankId: string) {
-    this.state.profile.active_tank_id = tankId;
+    if (this.state.profile.coins < tier.unlock_cost_coins) return Promise.reject(new GameError('not_enough_coins', 'not_enough_coins'));
+    this.state.profile.coins -= tier.unlock_cost_coins;
+    tank.tier_id = tierId;
     return this.snap();
   }
 

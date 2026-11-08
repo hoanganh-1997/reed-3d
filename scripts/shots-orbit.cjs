@@ -7,7 +7,8 @@ const { chromium } = require('playwright');
   page.on('pageerror', (e) => console.log('pageerror', e.message));
   await page.goto(url);
   await page.waitForTimeout(2500);
-  if (tier) { await page.click(`.tier[data-tier=${tier}]`); await page.waitForTimeout(4000); }
+  // Demo: buy the size in the shop (use ?demoLevel=45&demoCoins=99999).
+  if (tier) { await page.click('[data-act=shop]'); await page.click(`[data-act=buy][data-tier=${tier}]`); await page.waitForTimeout(4000); }
   await page.screenshot({ path: `${out}/orbit-${tier}-front.png` });
   for (const [name, dx] of [['left', 700], ['right', -1400]]) {
     await page.mouse.move(720, 400);

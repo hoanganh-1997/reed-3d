@@ -9,6 +9,7 @@ const ERROR_TEXT: Record<string, string> = {
   level_too_low: 'Chưa đủ cấp để mở bể này.',
   already_unlocked: 'Bạn đã mở bể này rồi.',
   not_enough_coins: 'Không đủ xu.',
+  not_an_upgrade: 'Bể này không lớn hơn bể hiện tại.',
   tank_not_found: 'Không tìm thấy bể.',
   not_authenticated: 'Phiên đăng nhập đã hết. Hãy đăng nhập lại.',
 };
@@ -42,17 +43,14 @@ async function main() {
       .filter((s): s is NonNullable<typeof s> => !!s);
 
   const hud = new Hud(app, data, {
-    onTier: (tier) => {
-      const owned = state.tanks.find((t) => t.tier_id === tier.id);
-      if (owned) {
-        previewTier = null;
-        if (owned.id !== state.profile.active_tank_id) return act(() => backend.selectTank(owned.id));
-        return refreshScene();
-      }
-      if (state.profile.level >= tier.unlock_level) {
-        previewTier = null;
-        return act(() => backend.unlockTank(tier.id), `Đã mở bể ${tier.name}!`);
-      }
+    onShop: () => hud.openShop(),
+    onBuy: (tier) => {
+      previewTier = null;
+      hud.closeShop();
+      return act(() => backend.upgradeTank(tier.id), `Đã nâng cấp lên bể ${tier.name}!`);
+    },
+    onPreview: (tier) => {
+      hud.closeShop();
       previewTier = tier;
       refreshScene();
     },
@@ -88,7 +86,9 @@ async function main() {
     world.setFocus(on);
   }
   addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && app.classList.contains('viewing')) setViewing(false);
+    if (e.key !== 'Escape') return;
+    hud.closeShop();
+    if (app.classList.contains('viewing')) setViewing(false);
   });
 
   let settingsEl: HTMLElement | null = null;

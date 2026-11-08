@@ -26,7 +26,7 @@ grant execute on function pg_temp.expect_error(text, text) to anon, authenticate
 -- ---------------------------------------------------------------- anon
 set role anon;
 select pg_temp.expect_error('select public.get_state()', '%permission denied%');
-select pg_temp.expect_error($q$select public.unlock_tank('cube35')$q$, '%permission denied%');
+select pg_temp.expect_error($q$select public.upgrade_tank('cube35')$q$, '%permission denied%');
 select pg_temp.expect_error('select * from public.profiles', '%permission denied%');
 do $$ begin
   if (select count(*) from public.tank_tiers) <> 8 then raise exception 'anon should read tank_tiers'; end if;
@@ -46,10 +46,12 @@ begin
   if s #>> '{tanks,0,tier_id}' <> 'cube30' then raise exception 'starter tier wrong'; end if;
 end $$;
 
--- Cannot unlock above level, nor write directly.
-select pg_temp.expect_error($q$select public.unlock_tank('cube35')$q$, '%level_too_low%');
-select pg_temp.expect_error($q$select public.unlock_tank('big200')$q$, '%level_too_low%');
-select pg_temp.expect_error($q$select public.unlock_tank('nope')$q$, '%unknown_tier%');
+-- Cannot upgrade above level, downgrade, or write directly; old multi-tank RPCs are gone.
+select pg_temp.expect_error($q$select public.upgrade_tank('cube35')$q$, '%level_too_low%');
+select pg_temp.expect_error($q$select public.upgrade_tank('big200')$q$, '%level_too_low%');
+select pg_temp.expect_error($q$select public.upgrade_tank('cube30')$q$, '%not_an_upgrade%');
+select pg_temp.expect_error($q$select public.upgrade_tank('nope')$q$, '%unknown_tier%');
+select pg_temp.expect_error($q$select public.unlock_tank('cube35')$q$, '%does not exist%');
 select pg_temp.expect_error('update public.profiles set level = 99', '%permission denied%');
 select pg_temp.expect_error('update public.profiles set coins = 999999', '%permission denied%');
 select pg_temp.expect_error($q$insert into public.tanks (user_id, tier_id) values ('11111111-1111-1111-1111-111111111111', 'big200')$q$, '%permission denied%');
@@ -84,7 +86,6 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', :bob, false);
 select pg_temp.expect_error(format('select public.feed_tank(%L)', :'alice_tank'), '%tank_not_found%');
 select pg_temp.expect_error(format('select public.change_water(%L)', :'alice_tank'), '%tank_not_found%');
-select pg_temp.expect_error(format('select public.select_tank(%L)', :'alice_tank'), '%tank_not_found%');
 reset role;
 
 -- ---------------------------------------------------------------- time-based tick
@@ -120,22 +121,33 @@ begin
 end $$;
 reset role;
 
--- ---------------------------------------------------------------- legit unlock
+-- ---------------------------------------------------------------- shop upgrade
 -- Give alice level 4 through the internal path (as the server would on level-up).
 select private.add_xp(:alice, 100 + 125 + 150 - 20, 0);
+-- Level-ups already granted coins; set a known balance below the cube35 price first.
+update public.profiles set coins = (select unlock_cost_coins - 1 from public.tank_tiers where id = 'cube35') where user_id = :alice;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :alice, false);
+select pg_temp.expect_error($q$select public.upgrade_tank('cube35')$q$, '%not_enough_coins%');
+reset role;
+update public.profiles set coins = (select unlock_cost_coins + 7 from public.tank_tiers where id = 'cube35') where user_id = :alice;
 set role authenticated;
 select set_config('request.jwt.claim.sub', :alice, false);
 do $$
-declare s jsonb;
+declare s jsonb; fish0 int := (select count(*) from public.tank_fish); tank0 uuid := (select active_tank_id from public.profiles);
 begin
   if (select level from public.profiles) <> 4 then raise exception 'expected level 4, got %', (select level from public.profiles); end if;
-  s := public.unlock_tank('cube35');
-  if jsonb_array_length(s -> 'tanks') <> 2 then raise exception 'cube35 not unlocked'; end if;
-  if (select tier_id from public.tanks where id = (select active_tank_id from public.profiles)) <> 'cube35' then raise exception 'active tank not switched'; end if;
-  raise notice 'ok legit unlock at level 4';
+  s := public.upgrade_tank('cube35');
+  if jsonb_array_length(s -> 'tanks') <> 1 then raise exception 'upgrade must keep one tank: %', s -> 'tanks'; end if;
+  if s #>> '{tanks,0,tier_id}' <> 'cube35' then raise exception 'tank not upgraded'; end if;
+  if (s #>> '{tanks,0,id}')::uuid <> tank0 then raise exception 'upgrade must keep the same tank'; end if;
+  if (s #>> '{profile,coins}')::int <> 7 then raise exception 'coins not deducted: %', s #>> '{profile,coins}'; end if;
+  if (select count(*) from public.tank_fish) <> fish0 then raise exception 'fish lost on upgrade'; end if;
+  raise notice 'ok shop upgrade at level 4';
 end $$;
-select pg_temp.expect_error($q$select public.unlock_tank('cube35')$q$, '%already_unlocked%');
-select pg_temp.expect_error($q$select public.unlock_tank('cube40')$q$, '%level_too_low%');
+select pg_temp.expect_error($q$select public.upgrade_tank('cube35')$q$, '%not_an_upgrade%');
+select pg_temp.expect_error($q$select public.upgrade_tank('cube30')$q$, '%not_an_upgrade%');
+select pg_temp.expect_error($q$select public.upgrade_tank('cube40')$q$, '%level_too_low%');
 reset role;
 
 -- ---------------------------------------------------------------- RLS is on everywhere

@@ -7,10 +7,10 @@ Language: talk to the owner (Andy) in Vietnamese; code, identifiers, comments an
 ## Concept
 
 - Main screen: a room with an aquarium; 3D fish swim in the tank.
-- Players level up to unlock bigger tanks.
+- Players level up, then **buy** bigger tanks in the shop (2026-11-08, Andy). Each player has **one tank**; buying a bigger size upgrades it in place and the fish move with it.
 - The room never changes. The bigger the tank, the further the camera pulls back: a 30 cm tank is a close-up on the stand top; the 1 × 2 m tank reveals floor, armchair and the big plant.
 - Concept mock (layout/HUD and camera idea only, not code to reuse): https://claude.ai/artifact/KfVS1R8CZyygPwwXFY4Vvr
-- HUD: level + XP, tank name + volume, coins + gems, settings, 3 meters (food, cleanliness, fish health), 4 buttons (feed, water change, decorate, collection), tank-size bar at the bottom. Clicking a locked tank shows a ghost preview and how many levels are missing.
+- HUD: level + XP, tank name + volume, coins + gems, settings, 3 meters (food, cleanliness, fish health), 5 buttons (feed, water change, decorate, collection, shop). No tank-size bar any more: the shop lists bigger sizes with level + coin price; any size can be previewed as a ghost outline.
 
 ## Decided
 
@@ -29,16 +29,16 @@ Language: talk to the owner (Andy) in Vietnamese; code, identifiers, comments an
 All tunables are in [`config/game.json`](config/game.json): tank tiers, species, XP curve, decay rates, rewards.
 After editing, run `npm run gen:static` → it writes a **new timestamped migration** that upserts the static tables. Apply it like any migration. The client reads static data from the DB (falls back to the bundled JSON).
 
-| Tier | L × D × H (cm) | Unlock level |
-|---|---|---|
-| Cube 30 | 30 × 30 × 30 | 1 |
-| Cube 35 | 35 × 35 × 35 | 4 |
-| Cube 40 | 40 × 40 × 40 | 8 |
-| Cube 45 | 45 × 45 × 45 | 13 |
-| Cube 50 | 50 × 50 × 50 | 19 |
-| Cube 55 | 55 × 55 × 55 | 26 |
-| Cube 60 | 60 × 60 × 60 | 34 |
-| 1 × 2 m | 200 × 100 × 80 | 45 |
+| Tier | L × D × H (cm) | Unlock level | Shop price (coins) |
+|---|---|---|---|
+| Cube 30 | 30 × 30 × 30 | 1 | starter |
+| Cube 35 | 35 × 35 × 35 | 4 | 150 |
+| Cube 40 | 40 × 40 × 40 | 8 | 300 |
+| Cube 45 | 45 × 45 × 45 | 13 | 500 |
+| Cube 50 | 50 × 50 × 50 | 19 | 800 |
+| Cube 55 | 55 × 55 × 55 | 26 | 1,200 |
+| Cube 60 | 60 × 60 × 60 | 34 | 1,800 |
+| 1 × 2 m | 200 × 100 × 80 | 45 | 4,000 |
 
 Camera framing (`framingFor` in `src/scene/world.ts`) and the stand size are derived from tier dimensions, so new tiers (e.g. 90/120 cm long tanks) need only a config row.
 
@@ -63,8 +63,7 @@ Assets (later phases):
 | RPC | Does |
 |---|---|
 | `get_state()` | creates profile + starter tank on first call, ticks all tanks, returns full state |
-| `unlock_tank(p_tier_id)` | requires `level >= unlock_level` and coins; creates tank (+ starter fish for now), makes it active |
-| `select_tank(p_tank_id)` | switch active tank (must own it) |
+| `upgrade_tank(p_tier_id)` | shop purchase: target must be bigger than the current tank, `level >= unlock_level`, `coins >= unlock_cost_coins`; deducts coins and changes the tank's tier in place (fish/meters kept). `unlock_tank`/`select_tank` were removed with the one-tank model. |
 | `feed_tank(p_tank_id)` | +food; XP/coins only if food was below `feed_reward_below` (anti-spam) |
 | `change_water(p_tank_id)` | cleanliness = 100; XP/coins only if it was below `water_reward_below` |
 

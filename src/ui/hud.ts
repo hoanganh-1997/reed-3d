@@ -12,12 +12,15 @@ export const ICONS = {
   decor: svg('<path d="M12 21V11"/><path d="M12 11c0-4 3-7 7-7 0 4-3 7-7 7z"/><path d="M12 14c0-3-2.5-5.5-6-5.5 0 3 2.5 5.5 6 5.5z"/><path d="M7 21h10"/>'),
   book: svg('<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/><path d="M9 7h6"/>'),
   eye: svg('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
+  shop: svg('<path d="M4 9h16l-1.2 10.2a2 2 0 0 1-2 1.8H7.2a2 2 0 0 1-2-1.8z"/><path d="M8.5 9V7a3.5 3.5 0 0 1 7 0v2"/>'),
   close: svg('<path d="M6 6l12 12M18 6 6 18"/>'),
   lock: `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`,
 };
 
 export interface HudHandlers {
-  onTier(tier: TankTier): void;
+  onShop(): void;
+  onBuy(tier: TankTier): void;
+  onPreview(tier: TankTier): void;
   onBack(): void;
   onFeed(): void;
   onWater(): void;
@@ -33,6 +36,7 @@ export class Hud {
   private el: HTMLElement;
   private $ = <T extends HTMLElement = HTMLElement>(sel: string) => this.el.querySelector(sel) as T;
   private toastTimer = 0;
+  private previewTier: TankTier | null = null;
 
   constructor(root: HTMLElement, private data: StaticData, private h: HudHandlers) {
     this.el = document.createElement('div');
@@ -68,32 +72,42 @@ export class Hud {
         <button class="action" data-act="water">${ICONS.water}Thay nước</button>
         <button class="action" data-act="decor">${ICONS.decor}Trang trí</button>
         <button class="action" data-act="collection">${ICONS.book}Bộ sưu tập</button>
+        <button class="action" data-act="shop">${ICONS.shop}Cửa hàng</button>
       </nav>
       <div class="lock-bar" data-ref="lockbar" hidden role="status">
         <p data-ref="lockmsg"></p>
-        <button data-act="back">Về bể hiện tại</button>
+        <button data-act="buy-preview" data-ref="buypreview" hidden>Mua</button>
+        <button data-act="back" class="secondary">Về bể hiện tại</button>
       </div>
-      <!-- Tank sizes move to the shop (2026-11-08); kept hidden until the shop replaces it. -->
-      <nav class="tiers panel" aria-label="Kích thước bể" hidden>
-        <div class="tiers-label"><strong>Kích thước bể</strong><span data-ref="next"></span></div>
-        <div class="tier-list" data-ref="tiers"></div>
-      </nav>
+      <div class="overlay shop" data-ref="shop" hidden>
+        <section class="card shop-card" role="dialog" aria-modal="true" aria-labelledby="shop-title">
+          <header class="shop-head">
+            <h2 id="shop-title">Cửa hàng</h2>
+            <span class="pill">${ICONS.coin}<span data-ref="shopcoins">0</span></span>
+            <button class="icon-btn" data-act="shop-close" aria-label="Đóng cửa hàng">${ICONS.close}</button>
+          </header>
+          <h3>Nâng cấp bể</h3>
+          <p>Bể mới thay bể hiện tại, cá được chuyển sang.</p>
+          <div class="shop-list" data-ref="shoplist"></div>
+        </section>
+      </div>
       <button class="view-exit panel" data-act="unview">${ICONS.close}Thoát chế độ ngắm</button>
       <div class="toast panel" data-ref="toast" role="status" aria-live="polite"></div>
     `;
     root.appendChild(this.el);
 
-    const tierList = this.$('[data-ref=tiers]');
-    tierList.innerHTML = data.tiers
-      .map((t) => `<button class="tier" data-tier="${t.id}"><b>${t.label}</b><small data-sub></small></button>`)
-      .join('');
-
     this.el.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).dataset.ref === 'shop') return this.closeShop(); // backdrop
       const btn = (e.target as HTMLElement).closest('button');
       if (!btn) return;
       const tierId = btn.dataset.tier;
-      if (tierId) return this.h.onTier(data.tiers.find((t) => t.id === tierId)!);
+      const tier = tierId ? data.tiers.find((t) => t.id === tierId) : undefined;
       switch (btn.dataset.act) {
+        case 'shop': return this.h.onShop();
+        case 'shop-close': return this.closeShop();
+        case 'buy': return tier && this.h.onBuy(tier);
+        case 'preview': return tier && this.h.onPreview(tier);
+        case 'buy-preview': return this.previewTier && this.h.onBuy(this.previewTier);
         case 'feed': return this.h.onFeed();
         case 'water': return this.h.onWater();
         case 'decor': return this.h.onDecor();
@@ -142,35 +156,59 @@ export class Hud {
     }
     this.el.querySelectorAll<HTMLButtonElement>('.action').forEach((b) => (b.disabled = preview));
 
-    const owned = new Set(state.tanks.map((t) => t.tier_id));
-    const activeTier = state.tanks.find((t) => t.id === p.active_tank_id)?.tier_id;
-    this.el.querySelectorAll<HTMLButtonElement>('.tier').forEach((b) => {
-      const t = this.data.tiers.find((x) => x.id === b.dataset.tier)!;
-      const isOwned = owned.has(t.id);
-      const canUnlock = !isOwned && p.level >= t.unlock_level;
-      const locked = !isOwned && !canUnlock;
-      b.classList.toggle('active', !preview && t.id === activeTier);
-      b.classList.toggle('preview', preview && t.id === shownTier.id);
-      b.classList.toggle('locked', locked);
-      b.classList.toggle('unlockable', canUnlock);
-      b.querySelector('[data-sub]')!.innerHTML = isOwned
-        ? `${fmt.format(volumeLiters(t))} lít`
-        : canUnlock
-          ? 'Mở khóa'
-          : `${ICONS.lock} Cấp ${t.unlock_level}`;
-      b.setAttribute('aria-label', isOwned ? `Chọn bể ${t.name}` : canUnlock ? `Mở khóa bể ${t.name}` : `Bể ${t.name}, cần cấp ${t.unlock_level}`);
-      b.setAttribute('aria-pressed', String(!preview && t.id === activeTier));
-    });
-
-    const next = this.data.tiers.find((t) => t.unlock_level > p.level);
-    this.$('[data-ref=next]').textContent = next ? `Tiếp theo: ${next.label} ở cấp ${next.unlock_level}` : 'Đã mở mọi kích thước';
-
+    this.previewTier = preview ? shownTier : null;
+    const currentTier = this.data.tiers.find((t) => t.id === tank?.tier_id) ?? shownTier;
     const lockbar = this.$('[data-ref=lockbar]');
     lockbar.hidden = !preview;
     if (preview) {
-      const missing = shownTier.unlock_level - p.level;
-      this.$('[data-ref=lockmsg]').textContent = `Bể ${shownTier.name} mở ở cấp ${shownTier.unlock_level}, bạn còn ${missing} cấp nữa`;
+      const s = this.offer(shownTier, currentTier, state);
+      this.$('[data-ref=lockmsg]').textContent = `Bể ${shownTier.name} · ${s.text}`;
+      const buy = this.$<HTMLButtonElement>('[data-ref=buypreview]');
+      buy.hidden = s.kind !== 'buy';
+      buy.textContent = `Mua · ${fmt.format(shownTier.unlock_cost_coins)} xu`;
     }
+    this.renderShop(state, currentTier);
+  }
+
+  /** What the shop can offer for `tier` given the player's current tank, level and coins. */
+  private offer(tier: TankTier, current: TankTier, state: PlayerState) {
+    const p = state.profile;
+    if (tier.id === current.id) return { kind: 'current' as const, text: 'Đang dùng' };
+    if (tier.sort_order < current.sort_order) return { kind: 'smaller' as const, text: 'Nhỏ hơn bể hiện tại' };
+    if (p.level < tier.unlock_level) return { kind: 'level' as const, text: `Cần cấp ${tier.unlock_level} (còn ${tier.unlock_level - p.level} cấp)` };
+    if (p.coins < tier.unlock_cost_coins) return { kind: 'coins' as const, text: `Thiếu ${fmt.format(tier.unlock_cost_coins - p.coins)} xu` };
+    return { kind: 'buy' as const, text: `${fmt.format(tier.unlock_cost_coins)} xu` };
+  }
+
+  private renderShop(state: PlayerState, current: TankTier) {
+    this.$('[data-ref=shopcoins]').textContent = fmt.format(state.profile.coins);
+    const rows = this.data.tiers
+      .filter((t) => t.sort_order >= current.sort_order)
+      .map((t) => {
+        const o = this.offer(t, current, state);
+        const price = o.kind === 'current' ? '' : `<span class="price">${ICONS.coin}${fmt.format(t.unlock_cost_coins)}</span>`;
+        const req = o.kind === 'current' ? 'Bể của bạn' : `Cấp ${t.unlock_level}`;
+        const action =
+          o.kind === 'current' ? '<span class="tag">Đang dùng</span>'
+          : o.kind === 'buy' ? `<button class="btn buy" data-act="buy" data-tier="${t.id}">Mua</button>`
+          : `<span class="tag ${o.kind === 'level' ? 'locked' : ''}">${o.kind === 'level' ? ICONS.lock + ' ' : ''}${o.text}</span>`;
+        const preview = o.kind === 'current' ? '' : `<button class="link" data-act="preview" data-tier="${t.id}">Xem trước</button>`;
+        return `<div class="shop-row ${o.kind}">
+          <div class="shop-size"><b>${t.label}</b><small>${fmt.format(volumeLiters(t))} lít</small></div>
+          <div class="shop-meta"><span>${req}</span>${price}</div>
+          <div class="shop-act">${action}${preview}</div>
+        </div>`;
+      });
+    this.$('[data-ref=shoplist]').innerHTML = rows.join('');
+  }
+
+  openShop() {
+    this.$('[data-ref=shop]').hidden = false;
+    this.$<HTMLButtonElement>('[data-act=shop-close]').focus();
+  }
+
+  closeShop() {
+    this.$('[data-ref=shop]').hidden = true;
   }
 
   toast(text: string, error = false) {

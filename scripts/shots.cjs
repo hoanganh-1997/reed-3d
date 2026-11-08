@@ -9,9 +9,12 @@ const { chromium } = require('playwright');
   page.on('pageerror', (e) => logs.push('pageerror: ' + e.message));
   await page.goto(url);
   await page.waitForTimeout(2500);
-  const tiers = process.env.TIERS ? process.env.TIERS.split(',') : await page.$$eval('.tier', (els) => els.map((e) => e.dataset.tier));
+  // Tiers are previewed through the shop (sizes moved out of the HUD).
+  const tiers = process.env.TIERS ? process.env.TIERS.split(',') : ['cube30', 'cube35', 'cube40', 'cube45', 'cube50', 'cube55', 'cube60', 'big200'];
   for (const id of tiers) {
-    await page.click(`.tier[data-tier=${id}]`);
+    await page.click('[data-act=shop]');
+    const btn = await page.$(`[data-act=preview][data-tier=${id}]`);
+    if (btn) await btn.click(); else await page.click('[data-act=shop-close]');
     await page.waitForTimeout(2600);
     if (process.env.ZOOM) { await page.mouse.move(720, 380); for (let i = 0; i < +process.env.ZOOM; i++) { await page.mouse.wheel(0, -200); await page.waitForTimeout(150); } await page.waitForTimeout(2500); }
     await page.screenshot({ path: `${out}/${w}x${h}-${id}.png` });

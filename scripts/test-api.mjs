@@ -46,12 +46,22 @@ async function main() {
   const tanks0 = s1.json.tanks.map((t) => t.tier_id).sort().join(',');
   await rpc('get_state', B.token);
 
-  console.log('\nCheat: unlock tanks above level through the RPC');
-  const tiers = (await call('GET', '/rest/v1/tank_tiers?select=id,unlock_level&order=sort_order', {})).json;
+  console.log('\nCheat: upgrade the tank above level / without coins through the RPC');
+  const tiers = (await call('GET', '/rest/v1/tank_tiers?select=id,unlock_level,unlock_cost_coins&order=sort_order', {})).json;
   for (const t of tiers.filter((t) => t.unlock_level > level0)) {
-    const r = await rpc('unlock_tank', A.token, { p_tier_id: t.id });
-    if (r.status >= 400 && /level_too_low/.test(JSON.stringify(r.json))) ok(`unlock_tank('${t.id}') at level ${level0} -> ${r.status} level_too_low`);
-    else bad(`unlock_tank('${t.id}') should be rejected`, `${r.status} ${JSON.stringify(r.json)}`);
+    const r = await rpc('upgrade_tank', A.token, { p_tier_id: t.id });
+    if (r.status >= 400 && /level_too_low/.test(JSON.stringify(r.json))) ok(`upgrade_tank('${t.id}') at level ${level0} -> ${r.status} level_too_low`);
+    else bad(`upgrade_tank('${t.id}') should be rejected`, `${r.status} ${JSON.stringify(r.json)}`);
+  }
+  for (const t of tiers.filter((t) => t.unlock_level <= level0 && t.unlock_cost_coins > coins0 && t.id !== s1.json.tanks[0].tier_id)) {
+    const r = await rpc('upgrade_tank', A.token, { p_tier_id: t.id });
+    if (r.status >= 400 && /not_enough_coins|not_an_upgrade/.test(JSON.stringify(r.json))) ok(`upgrade_tank('${t.id}') with ${coins0} coins -> ${r.status} ${r.json.message.split(':')[0]}`);
+    else bad(`upgrade_tank('${t.id}') should be rejected`, `${r.status} ${JSON.stringify(r.json)}`);
+  }
+  for (const fn of ['unlock_tank', 'select_tank']) {
+    const r = await rpc(fn, A.token, fn === 'unlock_tank' ? { p_tier_id: 'cube35' } : { p_tank_id: s1.json.tanks[0].id });
+    if (r.status >= 400) ok(`removed rpc/${fn} -> ${r.status}`);
+    else bad(`rpc/${fn} should be gone`, `${r.status} ${JSON.stringify(r.json)}`);
   }
 
   console.log('\nCheat: write player tables directly (PostgREST)');
@@ -81,7 +91,7 @@ async function main() {
 
   console.log('\nCheat: act on another player\'s tank / read their data');
   const sB = (await rpc('get_state', B.token)).json;
-  for (const fn of ['feed_tank', 'change_water', 'select_tank']) {
+  for (const fn of ['feed_tank', 'change_water']) {
     const r = await rpc(fn, A.token, { p_tank_id: sB.tanks[0].id });
     if (r.status >= 400) ok(`${fn}(B's tank) as A -> ${r.status}`);
     else bad(`${fn}(B's tank) should be rejected`, `${r.status} ${JSON.stringify(r.json)}`);
@@ -94,8 +104,8 @@ async function main() {
   }
 
   console.log('\nCheat: anonymous (no login)');
-  for (const fn of ['get_state', 'unlock_tank']) {
-    const r = await rpc(fn, undefined, fn === 'unlock_tank' ? { p_tier_id: 'cube35' } : {});
+  for (const fn of ['get_state', 'upgrade_tank']) {
+    const r = await rpc(fn, undefined, fn === 'upgrade_tank' ? { p_tier_id: 'cube35' } : {});
     if (r.status >= 400) ok(`anon rpc/${fn} -> ${r.status}`);
     else bad(`anon rpc/${fn} should be rejected`, `${r.status} ${JSON.stringify(r.json)}`);
   }

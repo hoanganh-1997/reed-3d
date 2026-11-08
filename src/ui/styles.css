@@ -62,23 +62,9 @@ button:disabled { cursor: default; opacity: 0.55; }
 .action.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 .action:not(:disabled):hover { filter: brightness(1.12); }
 
-/* ---------- tier bar ---------- */
-.tiers { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(16px, env(safe-area-inset-bottom)); max-width: calc(100% - 32px); display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
-.tiers-label { flex: none; width: 140px; display: flex; flex-direction: column; gap: 2px; padding-left: 8px; }
-.tiers-label strong { font: 700 17px/1.15 var(--display); }
-.tiers-label span { font-size: 12px; color: var(--muted); }
-.tier-list { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
-.tier-list::-webkit-scrollbar { display: none; }
-.tier { flex: none; width: 100px; height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border-radius: 14px; border: 2px solid transparent; background: rgba(255,255,255,0.1); }
-.tier b { font: 700 19px/1.1 var(--display); }
-.tier small { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; }
-.tier.active { background: var(--accent); color: var(--accent-ink); }
-.tier.locked { background: rgba(255,255,255,0.04); color: var(--muted); }
-.tier.preview { border-color: var(--accent); color: #ffe9a8; background: rgba(247,201,59,0.16); }
-.tier.unlockable { border-color: var(--health); }
 
 /* ---------- lock preview ---------- */
-.lock-bar { position: absolute; left: 50%; transform: translateX(-50%); bottom: 112px; display: flex; align-items: center; gap: 16px; padding: 10px 10px 10px 20px; border: 2px solid var(--accent); border-radius: var(--radius); background: rgba(10,22,34,0.94); max-width: calc(100% - 32px); }
+.lock-bar { position: absolute; left: 50%; transform: translateX(-50%); bottom: 24px; display: flex; align-items: center; gap: 16px; padding: 10px 10px 10px 20px; border: 2px solid var(--accent); border-radius: var(--radius); background: rgba(10,22,34,0.94); max-width: calc(100% - 32px); }
 .lock-bar p { margin: 0; font-size: 15px; font-weight: 600; }
 .lock-bar button { flex: none; height: 44px; padding: 0 18px; border-radius: 12px; border: none; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 14px; }
 
@@ -113,6 +99,37 @@ button:disabled { cursor: default; opacity: 0.55; }
 .viewing .hud > :not(.view-exit, .toast), .viewing .demo-banner, .viewing .settings-menu { display: none !important; }
 .viewing .view-exit { display: inline-flex; }
 
+/* ---------- shop ---------- */
+.shop { z-index: 5; }
+.shop-card { width: min(520px, 100%); max-height: calc(100% - 32px); overflow: auto; gap: 10px; }
+.shop-head { display: flex; align-items: center; gap: 10px; }
+.shop-head h2 { flex: 1; }
+.shop-head .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,0.08); font-weight: 700; }
+.shop-head .icon-btn { background: rgba(255,255,255,0.08); border: none; color: var(--text); }
+.shop-card h3 { margin: 6px 0 0; font: 700 18px/1.2 var(--display); }
+.shop-list { display: flex; flex-direction: column; gap: 8px; }
+.shop-row { display: grid; grid-template-columns: 92px 1fr auto; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,0.06); border: 1px solid var(--line); }
+.shop-row.current { border-color: var(--accent); }
+.shop-row.level { opacity: 0.7; }
+.shop-size { display: flex; flex-direction: column; }
+.shop-size b { font: 700 20px/1.1 var(--display); }
+.shop-size small, .shop-meta span { font-size: 12px; color: var(--muted); }
+.shop-meta { display: flex; flex-direction: column; gap: 2px; }
+.shop-meta .price { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 15px; color: var(--text); }
+.shop-meta .price .icon { width: 16px; height: 16px; }
+.shop-act { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.shop-act .buy { height: 40px; padding: 0 22px; border-radius: 12px; border: none; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 14px; cursor: pointer; }
+.shop-act .tag { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); text-align: right; }
+.shop-row.current .tag { color: var(--accent); }
+.shop-act .link { border: none; background: none; color: var(--clean); font-size: 13px; font-weight: 600; padding: 2px 0; cursor: pointer; text-decoration: underline; }
+.lock-bar button.secondary { background: rgba(255,255,255,0.12); color: var(--text); }
+
+@media (max-width: 440px) {
+  /* Narrow phones: gems are not spendable yet, keep the top bar on one line. */
+  .wallet .pill[aria-label="Ngọc"] { display: none; }
+  .shop-act .tag { font-size: 12px; }
+}
+
 [hidden] { display: none !important; }
 
 /* ---------- small screens ---------- */
@@ -129,12 +146,9 @@ button:disabled { cursor: default; opacity: 0.55; }
   .meter { flex: 1; min-width: 0; }
   .meter-head { font-size: 11px; gap: 4px; }
   .meter-head span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .actions { top: auto; bottom: 150px; left: 12px; right: 12px; width: auto; flex-direction: row; gap: 8px; }
+  .actions { top: auto; bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; right: 12px; width: auto; flex-direction: row; gap: 8px; }
   .action { flex: 1; height: 62px; font-size: 11px; gap: 4px; }
-  .tiers { left: 12px; right: 12px; transform: none; max-width: none; flex-direction: column; align-items: stretch; gap: 6px; padding: 8px; }
-  .tiers-label { width: auto; flex-direction: row; justify-content: space-between; align-items: baseline; padding: 0 4px; }
-  .tier { width: 84px; height: 54px; }
-  .lock-bar { bottom: 222px; left: 12px; right: 12px; transform: none; max-width: none; padding: 8px 8px 8px 14px; gap: 10px; }
+  .lock-bar { bottom: 90px; left: 12px; right: 12px; transform: none; max-width: none; padding: 8px 8px 8px 14px; gap: 10px; }
   .lock-bar p { font-size: 13px; }
   .lock-bar button { padding: 0 12px; font-size: 13px; }
   .toast { top: 200px; max-width: calc(100% - 24px); text-align: center; }

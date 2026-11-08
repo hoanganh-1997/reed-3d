@@ -26,8 +26,12 @@ const { chromium } = require('playwright');
   const before = await page.evaluate(() => window.__reef.state);
   console.log(`PASS signed in: level ${before.profile.level}, coins ${before.profile.coins}, tanks ${before.tanks.length}`);
 
-  // Locked tier: should preview, not unlock
-  await page.click('.tier[data-tier=big200]');
+  // Shop: a locked size can be previewed, not bought
+  await page.click('[data-act=shop]');
+  await page.waitForSelector('[data-ref=shop]:not([hidden])');
+  if (await page.$('.shop-row.level [data-act=buy]')) fail('locked size has a buy button');
+  else console.log('PASS shop shows locked sizes without a buy button');
+  await page.click('[data-act=preview][data-tier=big200]');
   await page.waitForTimeout(800);
   const lockText = await page.textContent('[data-ref=lockmsg]');
   if (await page.isVisible('[data-ref=lockbar]')) console.log('PASS locked tank preview:', lockText);
