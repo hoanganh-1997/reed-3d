@@ -51,7 +51,8 @@ select pg_temp.expect_error($q$select public.upgrade_tank('cube35')$q$, '%level_
 select pg_temp.expect_error($q$select public.upgrade_tank('big200')$q$, '%level_too_low%');
 select pg_temp.expect_error($q$select public.upgrade_tank('cube30')$q$, '%not_an_upgrade%');
 select pg_temp.expect_error($q$select public.upgrade_tank('nope')$q$, '%unknown_tier%');
-select pg_temp.expect_error($q$select public.unlock_tank('cube35')$q$, '%does not exist%');
+select pg_temp.expect_error($q$select public.unlock_tank('cube35')$q$, '%permission denied%');
+select pg_temp.expect_error($q$select public.select_tank('00000000-0000-0000-0000-000000000000')$q$, '%permission denied%');
 select pg_temp.expect_error('update public.profiles set level = 99', '%permission denied%');
 select pg_temp.expect_error('update public.profiles set coins = 999999', '%permission denied%');
 select pg_temp.expect_error($q$insert into public.tanks (user_id, tier_id) values ('11111111-1111-1111-1111-111111111111', 'big200')$q$, '%permission denied%');

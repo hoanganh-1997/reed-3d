@@ -63,7 +63,7 @@ Assets (later phases):
 | RPC | Does |
 |---|---|
 | `get_state()` | creates profile + starter tank on first call, ticks all tanks, returns full state |
-| `upgrade_tank(p_tier_id)` | shop purchase: target must be bigger than the current tank, `level >= unlock_level`, `coins >= unlock_cost_coins`; deducts coins and changes the tank's tier in place (fish/meters kept). `unlock_tank`/`select_tank` were removed with the one-tank model. |
+| `upgrade_tank(p_tier_id)` | shop purchase: target must be bigger than the current tank, `level >= unlock_level`, `coins >= unlock_cost_coins`; deducts coins and changes the tank's tier in place (fish/meters kept). `unlock_tank`/`select_tank` are no longer executable by players (one-tank model). |
 | `feed_tank(p_tank_id)` | +food; XP/coins only if food was below `feed_reward_below` (anti-spam) |
 | `change_water(p_tank_id)` | cleanliness = 100; XP/coins only if it was below `water_reward_below` |
 

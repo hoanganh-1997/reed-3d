@@ -1,9 +1,10 @@
 -- Tank sizes move to the shop (2026-11-08, Andy): each player has ONE tank.
 -- Buying a bigger size upgrades that tank in place; fish and meters carry over.
--- unlock_tank / select_tank (multi-tank model) are removed.
+-- unlock_tank / select_tank (multi-tank model) are no longer callable by players
+-- (execute revoked; the functions can be dropped in a later cleanup).
 
-drop function if exists public.unlock_tank(text);
-drop function if exists public.select_tank(uuid);
+revoke execute on function public.unlock_tank(text) from authenticated;
+revoke execute on function public.select_tank(uuid) from authenticated;
 
 -- Upgrades the player's active tank to a bigger tier.
 -- Server checks: tier exists, is bigger than the current one, level, coins.

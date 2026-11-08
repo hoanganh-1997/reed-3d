@@ -158,6 +158,32 @@
       "accent_color": "#ff7a2a",
       "model_url": "/models/achilles_tang.34c76cd3ec.glb",
       "model_forward": "-x"
+    },
+    {
+      "id": "naso_tang",
+      "common_name": "Naso tang",
+      "scientific_name": "Naso lituratus",
+      "adult_length_cm": 45,
+      "min_tier": "cube30",
+      "starter": false,
+      "body_color": "#5b6470",
+      "fin_color": "#f5a623",
+      "accent_color": "#ff8a1f",
+      "model_url": "/models/naso_tang.352834aeed.glb",
+      "model_forward": "-x"
+    },
+    {
+      "id": "foxface",
+      "common_name": "Foxface rabbitfish",
+      "scientific_name": "Siganus vulpinus",
+      "adult_length_cm": 24,
+      "min_tier": "cube30",
+      "starter": false,
+      "body_color": "#f2c418",
+      "fin_color": "#f2c418",
+      "accent_color": "#1b1b1b",
+      "model_url": "/models/foxface.093b653902.glb",
+      "model_forward": "-x"
     }
   ],
   "visual": {
