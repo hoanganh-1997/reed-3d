@@ -64,6 +64,14 @@ async function main() {
     else bad(`rpc/${fn} should be gone`, `${r.status} ${JSON.stringify(r.json)}`);
   }
 
+  console.log('\nCheat: buy fish without meeting the shop rules');
+  for (const [sp, why] of [['naso_tang', /level_too_low/], ['yellow_tang', /tank_full|not_enough_coins/], ['nope', /unknown_species/]]) {
+    const r = await rpc('buy_fish', A.token, { p_species_id: sp });
+    if (r.status >= 400 && why.test(JSON.stringify(r.json))) ok(`buy_fish('${sp}') -> ${r.status} ${r.json.message.split(':')[0]}`);
+    else bad(`buy_fish('${sp}') should be rejected`, `${r.status} ${JSON.stringify(r.json)}`);
+  }
+  { const r = await rpc('buy_fish', undefined, { p_species_id: 'yellow_tang' }); if (r.status >= 400) ok(`anon rpc/buy_fish -> ${r.status}`); else bad('anon buy_fish should be rejected', r.status); }
+
   console.log('\nCheat: write player tables directly (PostgREST)');
   const attempts = [
     ['PATCH profiles level=99', () => call('PATCH', `/rest/v1/profiles?user_id=eq.${A.id}`, { token: A.token, body: { level: 99 }, prefer: 'return=representation' })],
