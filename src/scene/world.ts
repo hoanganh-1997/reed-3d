@@ -62,7 +62,7 @@ export function focusFramingFor(tier: TankTier, aspect: number): Framing {
   const z = ROOM.backZ + 0.04 + Math.max(0.42, D + 0.08) / 2;
   const v = THREE.MathUtils.degToRad(BASE_FOV) / 2;
   const h = Math.atan(Math.tan(v) * aspect);
-  const dist = Math.max((H * 0.95) / 2 / Math.tan(v), (L * 0.88) / 2 / Math.tan(h)) + D * 0.15;
+  const dist = Math.max((H * 1.2) / 2 / Math.tan(v), (L * 1.05) / 2 / Math.tan(h)) + D * 0.5;
   const target = new THREE.Vector3(0, standH + H * 0.5, z);
   const pos = new THREE.Vector3(0, target.y + dist * 0.08, z + dist);
   return { pos, target, fov: BASE_FOV };

@@ -161,22 +161,23 @@
     }
   ],
   "visual": {
-    "$comment": "Client-only look settings (not stored in DB). The room stays warm sunset. The tank light mixes a white 'day' look (true fish colours, ~12000K) with a blue actinic 'night' look; light_mix 0 = white, 1 = blue. Players can change it in Settings.",
-    "light_mix_default": 0.35,
+    "$comment": "Client-only look settings (not stored in DB). The room stays warm sunset. The tank light mixes a white 'day' look (true fish colours, ~12000K) with a blue actinic 'night' look; light_mix 0 = white, 1 = blue. Players can change it in Settings. Water cues (depth gradient, caustics, waterline, particles, bubbles) are in src/scene/water.ts; water_back tints the back pane.",
+    "light_mix_default": 0.45,
     "tone_mapping": "neutral",
     "exposure": 1.0,
     "day": {
-      "tank_light": "#eef4ff",
+      "tank_light": "#dbe8ff",
       "tank_light_intensity": 6,
-      "tank_glow": "#d6e6ff",
+      "tank_glow": "#c4dcff",
       "tank_glow_intensity": 1.0,
-      "lid_light": "#f4f8ff",
+      "lid_light": "#e6efff",
       "water_color": "#0d4a7a",
       "water_emissive": "#0b4f8f",
-      "water_emissive_intensity": 0.18,
-      "water_opacity": 0.12,
+      "water_emissive_intensity": 0.22,
+      "water_opacity": 0.14,
       "fish_glow": 0.08,
-      "model_fish_glow": 0.25
+      "model_fish_glow": 0.25,
+      "water_back": "#3d8fd6"
     },
     "night": {
       "tank_light": "#2a6bff",
@@ -189,7 +190,8 @@
       "water_emissive_intensity": 0.6,
       "water_opacity": 0.26,
       "fish_glow": 0.3,
-      "model_fish_glow": 0.9
+      "model_fish_glow": 0.9,
+      "water_back": "#1446c8"
     },
     "coral_colors": [
       "#5cff9a",

@@ -4,6 +4,7 @@ import { Fish, fishLengthM } from './fish';
 import { cachedFishModel, type Axis } from './models';
 import gameConfig from '../../config/game.json';
 import type { Look } from './look';
+import { WaterFx } from './water';
 
 const CORAL_COLORS = gameConfig.visual.coral_colors;
 
@@ -33,6 +34,7 @@ export class Tank {
   private surfMat: THREE.MeshStandardMaterial;
   private lidMat: THREE.MeshStandardMaterial;
   private look: Look;
+  private waterFx: WaterFx;
   private spotScale: number;
   private glowScale: number;
 
@@ -115,9 +117,12 @@ export class Tank {
     lid.position.y = H + GLASS + 0.008;
 
     // Tank is the brightest light in the room.
-    this.spotScale = Math.max(0.6, L * D * 4);
+    // Matches the old falloff at mid-depth, but now uniform across the whole tank.
+    this.spotScale = 1 / Math.pow(H * 0.6, 1.4);
     this.glowScale = Math.max(1, L * 2);
-    this.spot = new THREE.SpotLight('#ffffff', 1, H * 3, Math.PI / 3, 0.6, 1.4);
+    // Wide, soft-edged cone with no falloff so every corner of the tank is lit evenly.
+    const cover = Math.atan(Math.hypot(L, D) / 2 / (H * 0.95)) * 1.15;
+    this.spot = new THREE.SpotLight('#ffffff', 1, 0, Math.min(Math.PI / 2.2, cover), 0.35, 0);
     this.spot.position.set(0, H + 0.05, 0);
     this.spot.target.position.set(0, 0, 0);
     this.spot.castShadow = true;
@@ -125,7 +130,8 @@ export class Tank {
     this.light = new THREE.PointLight('#ffffff', 1, Math.max(1.6, L * 2.5), 1.8);
     this.light.position.set(0, H * 0.6, D * 0.2);
 
-    this.waterGroup.add(water, this.surface, sand, rocks, this.spot, this.spot.target, this.light, lid);
+    this.waterFx = new WaterFx(L, D, sandH, waterH);
+    this.waterGroup.add(water, this.surface, sand, rocks, this.waterFx.group, this.spot, this.spot.target, this.light, lid);
     this.setLook(look);
     this.group.add(this.waterGroup, glass, edges);
 
@@ -186,6 +192,7 @@ export class Tank {
     this.lidMat.color.copy(look.lid_light);
     this.lidMat.emissive.copy(look.lid_light);
     for (const f of this.fish) f.setGlow(look);
+    this.waterFx.setLook(look);
   }
 
   setFish(speciesList: Species[]) {
@@ -268,6 +275,7 @@ export class Tank {
       pos.setZ(i, Math.sin(x * 40 + time * 1.7) * 0.0015 + Math.cos(y * 35 + time * 1.3) * 0.0015);
     }
     pos.needsUpdate = true;
+    this.waterFx.update(time);
     this.light.intensity = this.light.userData.base ?? (this.light.userData.base = this.light.intensity);
     this.light.intensity = this.light.userData.base * (0.92 + Math.sin(time * 1.1) * 0.08);
   }
@@ -280,6 +288,7 @@ export class Tank {
   dispose() {
     for (const f of this.fish) f.dispose();
     for (const d of this.disposables) d.dispose();
+    this.waterFx.dispose();
     this.spot.shadow.map?.dispose();
   }
 }
