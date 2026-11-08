@@ -7,7 +7,8 @@
     "preview": "vite preview",
     "gen:static": "node scripts/gen-static.mjs",
     "test:db": "bash scripts/test-db-local.sh",
-    "test:api": "node scripts/test-api.mjs"
+    "test:api": "node scripts/test-api.mjs",
+    "test:e2e": "node scripts/e2e-login.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
