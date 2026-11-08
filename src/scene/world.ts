@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { Species, TankTier } from '../game/types';
 import { Room, ROOM } from './room';
 import { Tank, standHeightFor } from './tank';
@@ -60,6 +61,8 @@ export class World {
   private lookAt = new THREE.Vector3();
   private timer = new THREE.Timer();
   private reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  private controls: OrbitControls;
+  private baseDist = 1;
 
   constructor(private container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -75,6 +78,22 @@ export class World {
     this.scene.background = new THREE.Color('#16242f');
     this.scene.fog = new THREE.Fog('#1b1612', 6, 12);
     this.scene.add(this.room.group);
+
+    // Orbit around the tank: front and both sides (azimuth ±90°), no panning.
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enablePan = false;
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.08;
+    this.controls.minAzimuthAngle = -Math.PI / 2;
+    this.controls.maxAzimuthAngle = Math.PI / 2;
+    this.controls.minPolarAngle = Math.PI * 0.22;
+    this.controls.maxPolarAngle = Math.PI * 0.56;
+    this.controls.rotateSpeed = 0.6;
+    this.controls.addEventListener('start', () => {
+      this.goal = null; // user takes over; stop the framing tween
+    });
+    this.renderer.domElement.addEventListener('dblclick', () => this.resetView());
+    this.renderer.domElement.style.touchAction = 'none';
 
     addEventListener('resize', () => this.resize());
     this.resize();
@@ -97,8 +116,17 @@ export class World {
     if (!sameTier || !ghost) this.tank!.setFish(ghost ? [] : fish);
     this.tank!.setGhost(ghost);
     this.room.setStand(tier.length_cm / 100, tier.depth_cm / 100, standHeightFor(tier), instant);
-    this.goal = framingFor(tier, this.camera.aspect);
+    this.resetView();
     if (instant || this.reducedMotion) this.snapCamera();
+  }
+
+  /** Tween back to the default front framing for the current tier. */
+  resetView() {
+    if (!this.tier) return;
+    this.goal = framingFor(this.tier, this.camera.aspect);
+    this.baseDist = this.goal.pos.distanceTo(this.goal.target);
+    this.controls.minDistance = this.baseDist * 0.45;
+    this.controls.maxDistance = this.baseDist * 1.1;
   }
 
   dropFood() {
@@ -114,6 +142,19 @@ export class World {
     this.camera.updateProjectionMatrix();
   }
 
+  /** Side views of big tanks would put the camera through a wall: pull it closer instead. */
+  private keepInsideRoom() {
+    const c = this.camera.position;
+    const t = this.controls.target;
+    const maxX = ROOM.halfWidth - 0.1;
+    const maxZ = ROOM.frontZ - 0.15;
+    let s = 1;
+    if (Math.abs(c.x) > maxX) s = Math.min(s, (maxX - Math.abs(t.x)) / Math.abs(c.x - t.x));
+    if (c.z > maxZ) s = Math.min(s, (maxZ - t.z) / (c.z - t.z));
+    if (c.y < 0.15) s = Math.min(s, (t.y - 0.15) / (t.y - c.y));
+    if (s < 1) c.copy(t).addScaledVector(c.clone().sub(t), Math.max(0.1, s));
+  }
+
   private resize() {
     const w = this.container.clientWidth;
     const h = this.container.clientHeight;
@@ -121,7 +162,7 @@ export class World {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     if (this.tier) {
-      this.goal = framingFor(this.tier, this.camera.aspect);
+      this.resetView();
       this.snapCamera();
     }
   }
@@ -142,6 +183,26 @@ export class World {
       this.camera.fov += (this.goal.fov - this.camera.fov) * k;
       this.camera.updateProjectionMatrix();
       this.camera.lookAt(this.lookAt);
+      this.controls.target.copy(this.lookAt);
+      if (this.camera.position.distanceTo(this.goal.pos) < 1e-3) this.goal = null;
+    } else {
+      // Side views must stay inside the room: the further away, the less we can swing.
+      const d = this.camera.position.distanceTo(this.controls.target);
+      const maxAz = Math.asin(Math.min(1, (ROOM.halfWidth - 0.15) / d));
+      this.controls.minAzimuthAngle = -maxAz;
+      this.controls.maxAzimuthAngle = maxAz;
+      this.controls.update(dt);
+      this.lookAt.copy(this.controls.target);
+      this.keepInsideRoom();
+    }
+    if (this.tank) {
+      const base = this.tank.group.position;
+      const h = this.tank.size.y;
+      this.room.fadeOccluders(this.camera.position, [
+        base.clone().setY(base.y + h * 0.5),
+        base.clone().setY(base.y + h * 0.15),
+        base.clone().setY(base.y + h * 0.85),
+      ], dt);
     }
     this.renderer.render(this.scene, this.camera);
   }

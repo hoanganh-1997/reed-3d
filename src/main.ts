@@ -136,6 +136,7 @@ async function main() {
   }
 
   refreshScene();
+  hud.toast(matchMedia('(pointer: coarse)').matches ? 'Vuốt để xoay xem bể từ 3 phía' : 'Kéo chuột để xoay xem bể từ 3 phía, nhấp đúp để về chính diện');
   // Projection keeps bars moving; a periodic resync keeps the server authoritative.
   setInterval(renderHud, 5_000);
   setInterval(async () => {

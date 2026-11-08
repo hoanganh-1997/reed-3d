@@ -78,6 +78,10 @@ export class Room {
   readonly sun: THREE.DirectionalLight;
   readonly lampLight: THREE.PointLight;
 
+  /** Props that fade out when they block the view of the tank while orbiting. */
+  private occluders: THREE.Object3D[] = [];
+  private fade = new Map<THREE.Object3D, number>();
+
   private cur = { w: 1.1, d: 0.45, h: 0.76, tankW: 0.3 };
   private goal = { ...this.cur };
 
@@ -161,6 +165,7 @@ export class Room {
     this.buildBooks();
     this.buildSmallPlant();
     g.add(this.lamp, this.books, this.smallPlant);
+    this.occluders.push(this.lamp, this.books, this.smallPlant);
 
     // Lighting: warm low sun through the window, dim ambient, desk lamp.
     const hemi = new THREE.HemisphereLight('#ffd7b0', '#2a1c14', 0.2);
@@ -204,6 +209,33 @@ export class Room {
       }
     }
     if (moved) this.applyStand();
+  }
+
+  /** Fade props whose bounds cross the line of sight from camera to tank. */
+  fadeOccluders(camera: THREE.Vector3, targets: THREE.Vector3[], dt: number) {
+    const box = new THREE.Box3();
+    const hit = new THREE.Vector3();
+    const rays = targets.map((t) => ({ ray: new THREE.Ray(camera.clone(), t.clone().sub(camera).normalize()), max: camera.distanceTo(t) }));
+    for (const o of this.occluders) {
+      box.setFromObject(o).expandByScalar(0.02);
+      const blocking = rays.some(({ ray, max }) => {
+        const p = ray.intersectBox(box, hit);
+        return !!p && camera.distanceTo(p) < max - 0.05;
+      });
+      const cur = this.fade.get(o) ?? 1;
+      const goal = blocking ? 0.12 : 1;
+      if (Math.abs(cur - goal) < 1e-3) continue;
+      const next = cur + (goal - cur) * (1 - Math.exp(-dt * 8));
+      this.fade.set(o, next);
+      o.traverse((m) => {
+        if (!(m instanceof THREE.Mesh)) return;
+        const mat = m.material as THREE.MeshStandardMaterial;
+        mat.transparent = next < 0.999;
+        mat.opacity = next;
+        mat.depthWrite = next > 0.5;
+        m.castShadow = next > 0.5;
+      });
+    }
   }
 
   private applyStand() {
@@ -331,6 +363,7 @@ export class Room {
     chair.position.set(-2.1, 0, -0.8);
     chair.rotation.y = 0.65;
     this.group.add(chair);
+    this.occluders.push(chair);
   }
 
   private buildBigPlant() {
@@ -360,6 +393,7 @@ export class Room {
     plant.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = true; });
     plant.position.set(2.35, 0, -1.4);
     this.group.add(plant);
+    this.occluders.push(plant);
   }
 
   private buildLamp() {

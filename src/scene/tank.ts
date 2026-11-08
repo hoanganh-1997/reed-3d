@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import type { Species, TankTier } from '../game/types';
 import { Fish, fishLengthM } from './fish';
+import gameConfig from '../../config/game.json';
+
+const LOOK = gameConfig.visual;
 
 /** Height of the stand top for a tier (metres). Large tanks sit on a lower stand. */
 export function standHeightFor(tier: TankTier) {
@@ -54,11 +57,11 @@ export class Tank {
     // Water volume (slightly below rim)
     const waterH = H * 0.93;
     const waterMat = this.track(new THREE.MeshPhysicalMaterial({
-      color: '#1784c4',
-      emissive: '#0a6aa6',
-      emissiveIntensity: 1.25,
+      color: LOOK.water_color,
+      emissive: LOOK.water_emissive,
+      emissiveIntensity: LOOK.water_emissive_intensity,
       transparent: true,
-      opacity: 0.42,
+      opacity: LOOK.water_opacity,
       roughness: 0.1,
       depthWrite: false,
     }));
@@ -67,7 +70,7 @@ export class Tank {
     water.renderOrder = 2;
 
     const surfMat = this.track(new THREE.MeshStandardMaterial({
-      color: '#bff4ff', emissive: '#58d6ef', emissiveIntensity: 0.25, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide,
+      color: '#c4ccff', emissive: LOOK.lid_light, emissiveIntensity: 0.3, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide,
     }));
     this.surface = new THREE.Mesh(this.track(new THREE.PlaneGeometry(L, D, 24, 12)), surfMat);
     this.surface.rotation.x = -Math.PI / 2;
@@ -78,7 +81,7 @@ export class Tank {
     const sandH = Math.max(0.015, H * 0.08);
     const sand = new THREE.Mesh(
       this.track(new THREE.BoxGeometry(L - 0.002, sandH, D - 0.002)),
-      this.track(new THREE.MeshStandardMaterial({ color: '#e7d3a6', roughness: 0.95 })),
+      this.track(new THREE.MeshStandardMaterial({ color: '#d6d2c4', roughness: 0.95 })),
     );
     sand.position.y = sandH / 2;
     sand.receiveShadow = true;
@@ -96,22 +99,23 @@ export class Tank {
       m.rotation.set(rng() * 3, rng() * 3, rng() * 3);
       m.castShadow = true;
       rocks.add(m);
+      rocks.add(this.coralCluster(m.position, r, rng));
     }
 
     // Lid light bar
     const lid = new THREE.Mesh(
       this.track(new THREE.BoxGeometry(L * 0.9, 0.012, Math.min(0.08, D * 0.3))),
-      this.track(new THREE.MeshStandardMaterial({ color: '#e9fbff', emissive: '#e9fbff', emissiveIntensity: 2.2 })),
+      this.track(new THREE.MeshStandardMaterial({ color: LOOK.lid_light, emissive: LOOK.lid_light, emissiveIntensity: 2.4 })),
     );
     lid.position.y = H + GLASS + 0.008;
 
     // Tank is the brightest light in the room.
-    this.spot = new THREE.SpotLight('#cdf6ff', 9 * Math.max(0.6, L * D * 4), H * 3, Math.PI / 3, 0.6, 1.4);
+    this.spot = new THREE.SpotLight(LOOK.tank_light, LOOK.tank_light_intensity * Math.max(0.6, L * D * 4), H * 3, Math.PI / 3, 0.6, 1.4);
     this.spot.position.set(0, H + 0.05, 0);
     this.spot.target.position.set(0, 0, 0);
     this.spot.castShadow = true;
     this.spot.shadow.mapSize.set(512, 512);
-    this.light = new THREE.PointLight('#5fd3ea', 1.6 * Math.max(1, L * 2), Math.max(2.5, L * 4), 1.6);
+    this.light = new THREE.PointLight(LOOK.tank_glow, LOOK.tank_glow_intensity * Math.max(1, L * 2), Math.max(1.6, L * 2.5), 1.8);
     this.light.position.set(0, H * 0.6, D * 0.2);
 
     this.waterGroup.add(water, this.surface, sand, rocks, this.spot, this.spot.target, this.light, lid);
@@ -127,6 +131,27 @@ export class Tank {
     this.ghostGroup.add(ghostEdges, ghostFill);
     this.ghostGroup.visible = false;
     this.group.add(this.ghostGroup);
+  }
+
+  /** Placeholder fluorescent corals sitting on a rock (glow under actinic light). */
+  private coralCluster(at: THREE.Vector3, r: number, rng: () => number) {
+    const g = new THREE.Group();
+    const n = 2 + Math.floor(rng() * 3);
+    for (let i = 0; i < n; i++) {
+      const color = LOOK.coral_colors[Math.floor(rng() * LOOK.coral_colors.length)];
+      const mat = this.track(new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.55, roughness: 0.6 }));
+      const branching = rng() > 0.5;
+      const geo = this.track(branching
+        ? new THREE.CylinderGeometry(r * 0.12, r * 0.18, r * (0.8 + rng() * 0.6), 10)
+        : new THREE.SphereGeometry(r * (0.3 + rng() * 0.15), 16, 12));
+      const m = new THREE.Mesh(geo, mat);
+      const a = rng() * Math.PI * 2;
+      m.position.set(at.x + Math.cos(a) * r * 0.5, at.y + r * (branching ? 0.95 : 0.7), at.z + Math.abs(Math.sin(a)) * r * 0.5);
+      if (branching) m.rotation.set((rng() - 0.5) * 0.6, 0, (rng() - 0.5) * 0.6);
+      else m.scale.y = 0.7;
+      g.add(m);
+    }
+    return g;
   }
 
   setGhost(ghost: boolean) {

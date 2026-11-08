@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import type { Species } from '../game/types';
+import gameConfig from '../../config/game.json';
+
+/** Slight self-glow so fish colours read under blue actinic light. */
+const FISH_GLOW = gameConfig.visual.fish_glow;
 
 /**
  * Placeholder fish built procedurally until the GLB models exist.
@@ -101,7 +105,7 @@ export class Fish {
       uLen: { value: 1.0 * L },
     };
 
-    const bodyMat = new THREE.MeshStandardMaterial({ color: species.body_color, roughness: 0.45, metalness: 0.05 });
+    const bodyMat = new THREE.MeshStandardMaterial({ color: species.body_color, emissive: species.body_color, emissiveIntensity: FISH_GLOW, roughness: 0.45, metalness: 0.05 });
     const finMat = new THREE.MeshStandardMaterial({
       color: species.fin_color,
       map: finTexture(),

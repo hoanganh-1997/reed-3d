@@ -22,21 +22,159 @@
     "starter_tier": "cube30"
   },
   "tankTiers": [
-    { "id": "cube30",  "name": "Cube 30",  "label": "30 cm",   "length_cm": 30,  "depth_cm": 30,  "height_cm": 30, "unlock_level": 1,  "unlock_cost_coins": 0, "max_fish": 2, "sort_order": 1 },
-    { "id": "cube35",  "name": "Cube 35",  "label": "35 cm",   "length_cm": 35,  "depth_cm": 35,  "height_cm": 35, "unlock_level": 4,  "unlock_cost_coins": 0, "max_fish": 2, "sort_order": 2 },
-    { "id": "cube40",  "name": "Cube 40",  "label": "40 cm",   "length_cm": 40,  "depth_cm": 40,  "height_cm": 40, "unlock_level": 8,  "unlock_cost_coins": 0, "max_fish": 3, "sort_order": 3 },
-    { "id": "cube45",  "name": "Cube 45",  "label": "45 cm",   "length_cm": 45,  "depth_cm": 45,  "height_cm": 45, "unlock_level": 13, "unlock_cost_coins": 0, "max_fish": 3, "sort_order": 4 },
-    { "id": "cube50",  "name": "Cube 50",  "label": "50 cm",   "length_cm": 50,  "depth_cm": 50,  "height_cm": 50, "unlock_level": 19, "unlock_cost_coins": 0, "max_fish": 4, "sort_order": 5 },
-    { "id": "cube55",  "name": "Cube 55",  "label": "55 cm",   "length_cm": 55,  "depth_cm": 55,  "height_cm": 55, "unlock_level": 26, "unlock_cost_coins": 0, "max_fish": 4, "sort_order": 6 },
-    { "id": "cube60",  "name": "Cube 60",  "label": "60 cm",   "length_cm": 60,  "depth_cm": 60,  "height_cm": 60, "unlock_level": 34, "unlock_cost_coins": 0, "max_fish": 5, "sort_order": 7 },
-    { "id": "big200",  "name": "1 × 2 m",  "label": "1 × 2 m", "length_cm": 200, "depth_cm": 100, "height_cm": 80, "unlock_level": 45, "unlock_cost_coins": 0, "max_fish": 9, "sort_order": 8 }
+    {
+      "id": "cube30",
+      "name": "Cube 30",
+      "label": "30 cm",
+      "length_cm": 30,
+      "depth_cm": 30,
+      "height_cm": 30,
+      "unlock_level": 1,
+      "unlock_cost_coins": 0,
+      "max_fish": 2,
+      "sort_order": 1
+    },
+    {
+      "id": "cube35",
+      "name": "Cube 35",
+      "label": "35 cm",
+      "length_cm": 35,
+      "depth_cm": 35,
+      "height_cm": 35,
+      "unlock_level": 4,
+      "unlock_cost_coins": 0,
+      "max_fish": 2,
+      "sort_order": 2
+    },
+    {
+      "id": "cube40",
+      "name": "Cube 40",
+      "label": "40 cm",
+      "length_cm": 40,
+      "depth_cm": 40,
+      "height_cm": 40,
+      "unlock_level": 8,
+      "unlock_cost_coins": 0,
+      "max_fish": 3,
+      "sort_order": 3
+    },
+    {
+      "id": "cube45",
+      "name": "Cube 45",
+      "label": "45 cm",
+      "length_cm": 45,
+      "depth_cm": 45,
+      "height_cm": 45,
+      "unlock_level": 13,
+      "unlock_cost_coins": 0,
+      "max_fish": 3,
+      "sort_order": 4
+    },
+    {
+      "id": "cube50",
+      "name": "Cube 50",
+      "label": "50 cm",
+      "length_cm": 50,
+      "depth_cm": 50,
+      "height_cm": 50,
+      "unlock_level": 19,
+      "unlock_cost_coins": 0,
+      "max_fish": 4,
+      "sort_order": 5
+    },
+    {
+      "id": "cube55",
+      "name": "Cube 55",
+      "label": "55 cm",
+      "length_cm": 55,
+      "depth_cm": 55,
+      "height_cm": 55,
+      "unlock_level": 26,
+      "unlock_cost_coins": 0,
+      "max_fish": 4,
+      "sort_order": 6
+    },
+    {
+      "id": "cube60",
+      "name": "Cube 60",
+      "label": "60 cm",
+      "length_cm": 60,
+      "depth_cm": 60,
+      "height_cm": 60,
+      "unlock_level": 34,
+      "unlock_cost_coins": 0,
+      "max_fish": 5,
+      "sort_order": 7
+    },
+    {
+      "id": "big200",
+      "name": "1 × 2 m",
+      "label": "1 × 2 m",
+      "length_cm": 200,
+      "depth_cm": 100,
+      "height_cm": 80,
+      "unlock_level": 45,
+      "unlock_cost_coins": 0,
+      "max_fish": 9,
+      "sort_order": 8
+    }
   ],
   "species": [
-    { "id": "yellow_tang", "common_name": "Yellow tang", "scientific_name": "Zebrasoma flavescens", "adult_length_cm": 20, "min_tier": "cube30", "starter": true,
-      "body_color": "#f6cf2f", "fin_color": "#f2b81d", "accent_color": "#ffffff", "model_url": null },
-    { "id": "regal_blue_tang", "common_name": "Regal blue tang", "scientific_name": "Paracanthurus hepatus", "adult_length_cm": 30, "min_tier": "cube30", "starter": true,
-      "body_color": "#1f5fd6", "fin_color": "#f2c230", "accent_color": "#0b1530", "model_url": null },
-    { "id": "achilles_tang", "common_name": "Achilles tang", "scientific_name": "Acanthurus achilles", "adult_length_cm": 24, "min_tier": "cube30", "starter": false,
-      "body_color": "#1b1d24", "fin_color": "#ff6a1f", "accent_color": "#ff7a2a", "model_url": null }
-  ]
+    {
+      "id": "yellow_tang",
+      "common_name": "Yellow tang",
+      "scientific_name": "Zebrasoma flavescens",
+      "adult_length_cm": 20,
+      "min_tier": "cube30",
+      "starter": true,
+      "body_color": "#f6cf2f",
+      "fin_color": "#f2b81d",
+      "accent_color": "#ffffff",
+      "model_url": null
+    },
+    {
+      "id": "regal_blue_tang",
+      "common_name": "Regal blue tang",
+      "scientific_name": "Paracanthurus hepatus",
+      "adult_length_cm": 30,
+      "min_tier": "cube30",
+      "starter": true,
+      "body_color": "#1f5fd6",
+      "fin_color": "#f2c230",
+      "accent_color": "#0b1530",
+      "model_url": null
+    },
+    {
+      "id": "achilles_tang",
+      "common_name": "Achilles tang",
+      "scientific_name": "Acanthurus achilles",
+      "adult_length_cm": 24,
+      "min_tier": "cube30",
+      "starter": false,
+      "body_color": "#1b1d24",
+      "fin_color": "#ff6a1f",
+      "accent_color": "#ff7a2a",
+      "model_url": null
+    }
+  ],
+  "visual": {
+    "$comment": "Client-only look settings (not stored in DB). Reef tanks use blue/actinic LEDs; the room stays warm sunset.",
+    "tank_light": "#4a5bff",
+    "tank_glow": "#2f45ff",
+    "lid_light": "#9aa6ff",
+    "water_color": "#050f55",
+    "water_emissive": "#1022c8",
+    "water_emissive_intensity": 0.75,
+    "water_opacity": 0.32,
+    "coral_colors": [
+      "#5cff9a",
+      "#ff5fc8",
+      "#3ff0ff",
+      "#ffa04a",
+      "#c9ff4a"
+    ],
+    "fish_glow": 0.32,
+    "tank_glow_intensity": 1.4,
+    "tank_light_intensity": 6
+  }
 }
