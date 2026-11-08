@@ -17,10 +17,10 @@ insert into public.tank_tiers (id, name, label, length_cm, depth_cm, height_cm, 
   ('big200', '1 × 2 m', '1 × 2 m', 200, 100, 80, 45, 4000, 9, 8)
 on conflict (id) do update set name = excluded.name, label = excluded.label, length_cm = excluded.length_cm, depth_cm = excluded.depth_cm, height_cm = excluded.height_cm, unlock_level = excluded.unlock_level, unlock_cost_coins = excluded.unlock_cost_coins, max_fish = excluded.max_fish, sort_order = excluded.sort_order;
 
-insert into public.species (id, common_name, scientific_name, adult_length_cm, min_tier, starter, body_color, fin_color, accent_color, model_url, model_forward) values
-  ('yellow_tang', 'Yellow tang', 'Zebrasoma flavescens', 20, 'cube30', true, '#f6cf2f', '#f2b81d', '#ffffff', '/models/yellow_tang.94281b4537.glb', '-x'),
-  ('regal_blue_tang', 'Regal blue tang', 'Paracanthurus hepatus', 30, 'cube30', true, '#1f5fd6', '#f2c230', '#0b1530', '/models/regal_blue_tang.3da5176437.glb', '-x'),
-  ('achilles_tang', 'Achilles tang', 'Acanthurus achilles', 24, 'cube30', false, '#1b1d24', '#ff6a1f', '#ff7a2a', '/models/achilles_tang.34c76cd3ec.glb', '-x'),
-  ('naso_tang', 'Naso tang', 'Naso lituratus', 45, 'cube30', false, '#5b6470', '#f5a623', '#ff8a1f', '/models/naso_tang.352834aeed.glb', '-x'),
-  ('foxface', 'Foxface rabbitfish', 'Siganus vulpinus', 24, 'cube30', false, '#f2c418', '#f2c418', '#1b1b1b', '/models/foxface.093b653902.glb', '-x')
-on conflict (id) do update set common_name = excluded.common_name, scientific_name = excluded.scientific_name, adult_length_cm = excluded.adult_length_cm, min_tier = excluded.min_tier, starter = excluded.starter, body_color = excluded.body_color, fin_color = excluded.fin_color, accent_color = excluded.accent_color, model_url = excluded.model_url, model_forward = excluded.model_forward;
+insert into public.species (id, common_name, scientific_name, adult_length_cm, min_tier, starter, body_color, fin_color, accent_color, model_url, model_forward, display_name, unlock_level, price_coins) values
+  ('yellow_tang', 'Yellow tang', 'Zebrasoma flavescens', 20, 'cube30', true, '#f6cf2f', '#f2b81d', '#ffffff', '/models/yellow_tang.94281b4537.glb', '-x', 'Tang vàng', 1, 120),
+  ('regal_blue_tang', 'Regal blue tang', 'Paracanthurus hepatus', 30, 'cube35', true, '#1f5fd6', '#f2c230', '#0b1530', '/models/regal_blue_tang.3da5176437.glb', '-x', 'Tang xanh', 5, 200),
+  ('achilles_tang', 'Achilles tang', 'Acanthurus achilles', 24, 'cube45', false, '#1b1d24', '#ff6a1f', '#ff7a2a', '/models/achilles_tang.34c76cd3ec.glb', '-x', 'Tang Achilles', 12, 350),
+  ('naso_tang', 'Naso tang', 'Naso lituratus', 45, 'cube60', false, '#5b6470', '#f5a623', '#ff8a1f', '/models/naso_tang.352834aeed.glb', '-x', 'Naso tang', 20, 500),
+  ('foxface', 'Foxface rabbitfish', 'Siganus vulpinus', 24, 'cube40', false, '#f2c418', '#f2c418', '#1b1b1b', '/models/foxface.093b653902.glb', '-x', 'Foxface', 8, 250)
+on conflict (id) do update set common_name = excluded.common_name, scientific_name = excluded.scientific_name, adult_length_cm = excluded.adult_length_cm, min_tier = excluded.min_tier, starter = excluded.starter, body_color = excluded.body_color, fin_color = excluded.fin_color, accent_color = excluded.accent_color, model_url = excluded.model_url, model_forward = excluded.model_forward, display_name = excluded.display_name, unlock_level = excluded.unlock_level, price_coins = excluded.price_coins;

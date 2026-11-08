@@ -151,6 +151,38 @@ select pg_temp.expect_error($q$select public.upgrade_tank('cube30')$q$, '%not_an
 select pg_temp.expect_error($q$select public.upgrade_tank('cube40')$q$, '%level_too_low%');
 reset role;
 
+-- ---------------------------------------------------------------- fish shop
+-- alice: level 4, cube35 (max 2 fish) holding the 2 starter fish, 7 coins.
+set role authenticated;
+select set_config('request.jwt.claim.sub', :alice, false);
+select pg_temp.expect_error($q$select public.buy_fish('nope')$q$, '%unknown_species%');
+select pg_temp.expect_error($q$select public.buy_fish('regal_blue_tang')$q$, '%level_too_low%');
+select pg_temp.expect_error($q$select public.buy_fish('yellow_tang')$q$, '%tank_full%');
+reset role;
+delete from public.tank_fish where id = (select id from public.tank_fish where user_id = :alice limit 1);
+set role authenticated;
+select set_config('request.jwt.claim.sub', :alice, false);
+select pg_temp.expect_error($q$select public.buy_fish('yellow_tang')$q$, '%not_enough_coins%');
+reset role;
+update public.profiles set coins = 1000, level = 8 where user_id = :alice;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :alice, false);
+select pg_temp.expect_error($q$select public.buy_fish('foxface')$q$, '%tank_too_small%');
+do $$
+declare s jsonb;
+begin
+  s := public.buy_fish('yellow_tang');
+  if (s #>> '{profile,coins}')::int <> 1000 - (select price_coins from public.species where id = 'yellow_tang') then raise exception 'fish price not deducted: %', s #>> '{profile,coins}'; end if;
+  if jsonb_array_length(s -> 'fish') <> 2 then raise exception 'fish not added: %', s -> 'fish'; end if;
+  raise notice 'ok buy_fish';
+end $$;
+select pg_temp.expect_error($q$select public.buy_fish('yellow_tang')$q$, '%tank_full%');
+select pg_temp.expect_error($q$insert into public.tank_fish (tank_id, user_id, species_id) select id, user_id, 'naso_tang' from public.tanks$q$, '%permission denied%');
+reset role;
+set role anon;
+select pg_temp.expect_error($q$select public.buy_fish('yellow_tang')$q$, '%permission denied%');
+reset role;
+
 -- ---------------------------------------------------------------- RLS is on everywhere
 do $$
 declare r record;

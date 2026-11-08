@@ -9,6 +9,9 @@ const ERROR_TEXT: Record<string, string> = {
   level_too_low: 'Chưa đủ cấp để mở bể này.',
   already_unlocked: 'Bạn đã mở bể này rồi.',
   not_enough_coins: 'Không đủ xu.',
+  tank_too_small: 'Bể hiện tại quá nhỏ cho loài cá này.',
+  tank_full: 'Bể đã đầy, hãy nâng cấp bể để thả thêm cá.',
+  unknown_species: 'Không tìm thấy loài cá.',
   not_an_upgrade: 'Bể này không lớn hơn bể hiện tại.',
   tank_not_found: 'Không tìm thấy bể.',
   not_authenticated: 'Phiên đăng nhập đã hết. Hãy đăng nhập lại.',
@@ -49,6 +52,7 @@ async function main() {
       hud.closeShop();
       return act(() => backend.upgradeTank(tier.id), `Đã nâng cấp lên bể ${tier.name}!`);
     },
+    onBuyFish: (sp) => act(() => backend.buyFish(sp.id), `Đã thả ${sp.display_name ?? sp.common_name} vào bể!`),
     onPreview: (tier) => {
       hud.closeShop();
       previewTier = tier;

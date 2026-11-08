@@ -17,6 +17,8 @@ export interface Backend {
   getState(): Promise<PlayerState>;
   /** Shop: upgrade the player's single tank to a bigger tier (server checks level + coins). */
   upgradeTank(tierId: string): Promise<PlayerState>;
+  /** Shop: add one fish to the player's tank (server checks level, tank size, space, coins). */
+  buyFish(speciesId: string): Promise<PlayerState>;
   feedTank(tankId: string): Promise<PlayerState>;
   changeWater(tankId: string): Promise<PlayerState>;
 }
@@ -88,6 +90,7 @@ class SupabaseBackend implements Backend {
 
   getState() { return this.rpc('get_state'); }
   upgradeTank(tierId: string) { return this.rpc('upgrade_tank', { p_tier_id: tierId }); }
+  buyFish(speciesId: string) { return this.rpc('buy_fish', { p_species_id: speciesId }); }
   feedTank(tankId: string) { return this.rpc('feed_tank', { p_tank_id: tankId }); }
   changeWater(tankId: string) { return this.rpc('change_water', { p_tank_id: tankId }); }
 }
@@ -131,6 +134,22 @@ class DemoBackend implements Backend {
     if (this.state.profile.coins < tier.unlock_cost_coins) return Promise.reject(new GameError('not_enough_coins', 'not_enough_coins'));
     this.state.profile.coins -= tier.unlock_cost_coins;
     tank.tier_id = tierId;
+    return this.snap();
+  }
+
+  buyFish(speciesId: string) {
+    const sp = this.data.species.find((s) => s.id === speciesId);
+    if (!sp) return Promise.reject(new GameError('unknown_species', 'unknown_species'));
+    const tank = this.state.tanks.find((t) => t.id === this.state.profile.active_tank_id)!;
+    const tier = this.data.tiers.find((t) => t.id === tank.tier_id)!;
+    const min = this.data.tiers.find((t) => t.id === sp.min_tier)!;
+    const n = this.state.fish.filter((f) => f.tank_id === tank.id).length;
+    if (this.state.profile.level < sp.unlock_level) return Promise.reject(new GameError('level_too_low', 'level_too_low'));
+    if (tier.sort_order < min.sort_order) return Promise.reject(new GameError('tank_too_small', 'tank_too_small'));
+    if (n >= tier.max_fish) return Promise.reject(new GameError('tank_full', 'tank_full'));
+    if (this.state.profile.coins < sp.price_coins) return Promise.reject(new GameError('not_enough_coins', 'not_enough_coins'));
+    this.state.profile.coins -= sp.price_coins;
+    this.state.fish.push({ id: 'demo-fish-' + Date.now(), tank_id: tank.id, species_id: speciesId });
     return this.snap();
   }
 

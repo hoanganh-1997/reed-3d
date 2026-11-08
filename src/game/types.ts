@@ -28,6 +28,11 @@ export interface Species {
   model_url: string | null;
   /** Which model axis the head points along: '+x' | '-x' | '+z' | '-z'. */
   model_forward: string;
+  /** Vietnamese name shown in the shop. */
+  display_name: string | null;
+  /** Shop: level needed to buy, and price in coins. min_tier is the smallest tank it may live in. */
+  unlock_level: number;
+  price_coins: number;
 }
 
 export interface StaticData {

@@ -1,4 +1,4 @@
-import { volumeLiters, type PlayerState, type StaticData, type Tank, type TankTier } from '../game/types';
+import { volumeLiters, type PlayerState, type Species, type StaticData, type Tank, type TankTier } from '../game/types';
 
 const svg = (path: string) =>
   `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
@@ -20,6 +20,7 @@ export const ICONS = {
 export interface HudHandlers {
   onShop(): void;
   onBuy(tier: TankTier): void;
+  onBuyFish(species: Species): void;
   onPreview(tier: TankTier): void;
   onBack(): void;
   onFeed(): void;
@@ -86,9 +87,18 @@ export class Hud {
             <span class="pill">${ICONS.coin}<span data-ref="shopcoins">0</span></span>
             <button class="icon-btn" data-act="shop-close" aria-label="Đóng cửa hàng">${ICONS.close}</button>
           </header>
-          <h3>Nâng cấp bể</h3>
-          <p>Bể mới thay bể hiện tại, cá được chuyển sang.</p>
-          <div class="shop-list" data-ref="shoplist"></div>
+          <div class="shop-tabs" role="tablist">
+            <button role="tab" data-act="tab" data-tab="fish" aria-selected="true">Cá</button>
+            <button role="tab" data-act="tab" data-tab="tank" aria-selected="false">Bể</button>
+          </div>
+          <div data-panel="fish">
+            <p data-ref="fishcap"></p>
+            <div class="shop-list" data-ref="fishlist"></div>
+          </div>
+          <div data-panel="tank" hidden>
+            <p>Bể mới thay bể hiện tại, cá được chuyển sang.</p>
+            <div class="shop-list" data-ref="shoplist"></div>
+          </div>
         </section>
       </div>
       <button class="view-exit panel" data-act="unview">${ICONS.close}Thoát chế độ ngắm</button>
@@ -105,6 +115,11 @@ export class Hud {
       switch (btn.dataset.act) {
         case 'shop': return this.h.onShop();
         case 'shop-close': return this.closeShop();
+        case 'tab': return this.showTab(btn.dataset.tab!);
+        case 'buy-fish': {
+          const sp = data.species.find((x) => x.id === btn.dataset.species);
+          return sp && this.h.onBuyFish(sp);
+        }
         case 'buy': return tier && this.h.onBuy(tier);
         case 'preview': return tier && this.h.onPreview(tier);
         case 'buy-preview': return this.previewTier && this.h.onBuy(this.previewTier);
@@ -168,6 +183,7 @@ export class Hud {
       buy.textContent = `Mua · ${fmt.format(shownTier.unlock_cost_coins)} xu`;
     }
     this.renderShop(state, currentTier);
+    this.renderFishShop(state, currentTier, fishCount);
   }
 
   /** What the shop can offer for `tier` given the player's current tank, level and coins. */
@@ -200,6 +216,41 @@ export class Hud {
         </div>`;
       });
     this.$('[data-ref=shoplist]').innerHTML = rows.join('');
+  }
+
+  /** Why a species can or cannot be bought for the current tank. */
+  private fishOffer(sp: Species, current: TankTier, state: PlayerState, fishCount: number) {
+    const p = state.profile;
+    const min = this.data.tiers.find((t) => t.id === sp.min_tier);
+    if (p.level < sp.unlock_level) return { kind: 'level' as const, text: `Cần cấp ${sp.unlock_level}` };
+    if (min && current.sort_order < min.sort_order) return { kind: 'tank' as const, text: `Cần bể ${min.label}` };
+    if (fishCount >= current.max_fish) return { kind: 'full' as const, text: 'Bể đã đầy' };
+    if (p.coins < sp.price_coins) return { kind: 'coins' as const, text: `Thiếu ${fmt.format(sp.price_coins - p.coins)} xu` };
+    return { kind: 'buy' as const, text: '' };
+  }
+
+  private renderFishShop(state: PlayerState, current: TankTier, fishCount: number) {
+    this.$('[data-ref=fishcap]').textContent = `Bể ${current.label}: ${fishCount}/${current.max_fish} cá. Cá mới được thả vào bể hiện tại.`;
+    const list = [...this.data.species].sort((a, b) => a.unlock_level - b.unlock_level || a.price_coins - b.price_coins);
+    this.$('[data-ref=fishlist]').innerHTML = list
+      .map((sp) => {
+        const o = this.fishOffer(sp, current, state, fishCount);
+        const min = this.data.tiers.find((t) => t.id === sp.min_tier);
+        const action = o.kind === 'buy'
+          ? `<button class="btn buy" data-act="buy-fish" data-species="${sp.id}">Mua</button>`
+          : `<span class="tag ${o.kind === 'level' ? 'locked' : ''}">${o.kind === 'level' ? ICONS.lock + ' ' : ''}${o.text}</span>`;
+        return `<div class="shop-row fish ${o.kind}">
+          <div class="shop-size"><span><span class="swatch" style="background:${sp.body_color}"></span><b>${sp.display_name ?? sp.common_name}</b></span><small><i>${sp.scientific_name}</i> · ${sp.adult_length_cm} cm</small></div>
+          <div class="shop-meta"><span>Cấp ${sp.unlock_level} · bể từ ${min?.label ?? ''}</span><span class="price">${ICONS.coin}${fmt.format(sp.price_coins)}</span></div>
+          <div class="shop-act">${action}</div>
+        </div>`;
+      })
+      .join('');
+  }
+
+  private showTab(tab: string) {
+    this.el.querySelectorAll<HTMLElement>('.shop-tabs [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+    this.el.querySelectorAll<HTMLElement>('[data-panel]').forEach((p) => (p.hidden = p.dataset.panel !== tab));
   }
 
   openShop() {
