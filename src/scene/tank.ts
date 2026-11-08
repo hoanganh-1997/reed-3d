@@ -1,0 +1,259 @@
+import * as THREE from 'three';
+import type { Species, TankTier } from '../game/types';
+import { Fish, fishLengthM } from './fish';
+
+/** Height of the stand top for a tier (metres). Large tanks sit on a lower stand. */
+export function standHeightFor(tier: TankTier) {
+  return tier.length_cm > 100 ? 0.62 : 0.76;
+}
+
+const GLASS = 0.006;
+
+/**
+ * One aquarium: glass, water, sand, rocks, lid light, fish.
+ * The group origin is the centre of the tank's bottom face.
+ */
+export class Tank {
+  readonly group = new THREE.Group();
+  readonly size: THREE.Vector3; // inner size in metres (x=length, y=height, z=depth)
+  readonly fish: Fish[] = [];
+  private waterGroup = new THREE.Group();
+  private ghostGroup = new THREE.Group();
+  private surface: THREE.Mesh;
+  private pellets: { mesh: THREE.Mesh; vy: number }[] = [];
+  private disposables: { dispose(): void }[] = [];
+  readonly light: THREE.PointLight;
+  readonly spot: THREE.SpotLight;
+
+  constructor(public tier: TankTier) {
+    const L = tier.length_cm / 100;
+    const H = tier.height_cm / 100;
+    const D = tier.depth_cm / 100;
+    this.size = new THREE.Vector3(L, H, D);
+
+    // Glass panes
+    const glassMat = this.track(new THREE.MeshPhysicalMaterial({
+      color: '#d8f3f6',
+      transparent: true,
+      opacity: 0.12,
+      roughness: 0.05,
+      metalness: 0,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }));
+    const glassGeo = this.track(new THREE.BoxGeometry(L + GLASS * 2, H + GLASS, D + GLASS * 2));
+    const glass = new THREE.Mesh(glassGeo, glassMat);
+    glass.position.y = (H + GLASS) / 2;
+    glass.renderOrder = 3;
+
+    // Silicone edges
+    const edgeGeo = this.track(new THREE.EdgesGeometry(glassGeo));
+    const edges = new THREE.LineSegments(edgeGeo, this.track(new THREE.LineBasicMaterial({ color: '#1d2b33', transparent: true, opacity: 0.8 })));
+    edges.position.copy(glass.position);
+
+    // Water volume (slightly below rim)
+    const waterH = H * 0.93;
+    const waterMat = this.track(new THREE.MeshPhysicalMaterial({
+      color: '#1784c4',
+      emissive: '#0a6aa6',
+      emissiveIntensity: 1.25,
+      transparent: true,
+      opacity: 0.42,
+      roughness: 0.1,
+      depthWrite: false,
+    }));
+    const water = new THREE.Mesh(this.track(new THREE.BoxGeometry(L - 0.002, waterH, D - 0.002)), waterMat);
+    water.position.y = waterH / 2;
+    water.renderOrder = 2;
+
+    const surfMat = this.track(new THREE.MeshStandardMaterial({
+      color: '#bff4ff', emissive: '#58d6ef', emissiveIntensity: 0.25, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide,
+    }));
+    this.surface = new THREE.Mesh(this.track(new THREE.PlaneGeometry(L, D, 24, 12)), surfMat);
+    this.surface.rotation.x = -Math.PI / 2;
+    this.surface.position.y = waterH;
+    this.surface.renderOrder = 2;
+
+    // Sand bed + rocks
+    const sandH = Math.max(0.015, H * 0.08);
+    const sand = new THREE.Mesh(
+      this.track(new THREE.BoxGeometry(L - 0.002, sandH, D - 0.002)),
+      this.track(new THREE.MeshStandardMaterial({ color: '#e7d3a6', roughness: 0.95 })),
+    );
+    sand.position.y = sandH / 2;
+    sand.receiveShadow = true;
+
+    const rockMat = this.track(new THREE.MeshStandardMaterial({ color: '#8a7a78', roughness: 0.95 }));
+    const rocks = new THREE.Group();
+    const rng = mulberry32(tier.sort_order * 977);
+    const rockCount = tier.length_cm > 100 ? 7 : 3;
+    for (let i = 0; i < rockCount; i++) {
+      const r = Math.min(L, D) * (0.09 + rng() * 0.08);
+      const g = this.track(rockGeometry(r, rng));
+      const m = new THREE.Mesh(g, rockMat);
+      m.scale.set(1.2, 0.7 + rng() * 0.5, 1);
+      m.position.set((rng() - 0.5) * L * 0.75, sandH + r * 0.4, -D * 0.25 + (rng() - 0.5) * D * 0.3);
+      m.rotation.set(rng() * 3, rng() * 3, rng() * 3);
+      m.castShadow = true;
+      rocks.add(m);
+    }
+
+    // Lid light bar
+    const lid = new THREE.Mesh(
+      this.track(new THREE.BoxGeometry(L * 0.9, 0.012, Math.min(0.08, D * 0.3))),
+      this.track(new THREE.MeshStandardMaterial({ color: '#e9fbff', emissive: '#e9fbff', emissiveIntensity: 2.2 })),
+    );
+    lid.position.y = H + GLASS + 0.008;
+
+    // Tank is the brightest light in the room.
+    this.spot = new THREE.SpotLight('#cdf6ff', 9 * Math.max(0.6, L * D * 4), H * 3, Math.PI / 3, 0.6, 1.4);
+    this.spot.position.set(0, H + 0.05, 0);
+    this.spot.target.position.set(0, 0, 0);
+    this.spot.castShadow = true;
+    this.spot.shadow.mapSize.set(512, 512);
+    this.light = new THREE.PointLight('#5fd3ea', 1.6 * Math.max(1, L * 2), Math.max(2.5, L * 4), 1.6);
+    this.light.position.set(0, H * 0.6, D * 0.2);
+
+    this.waterGroup.add(water, this.surface, sand, rocks, this.spot, this.spot.target, this.light, lid);
+    this.group.add(this.waterGroup, glass, edges);
+
+    // Ghost: shown when previewing a locked tier
+    const ghostMat = this.track(new THREE.LineDashedMaterial({ color: '#f7c93b', dashSize: 0.03, gapSize: 0.02 }));
+    const ghostEdges = new THREE.LineSegments(edgeGeo, ghostMat);
+    ghostEdges.computeLineDistances();
+    ghostEdges.position.copy(glass.position);
+    const ghostFill = new THREE.Mesh(glassGeo, this.track(new THREE.MeshBasicMaterial({ color: '#f7c93b', transparent: true, opacity: 0.06, depthWrite: false })));
+    ghostFill.position.copy(glass.position);
+    this.ghostGroup.add(ghostEdges, ghostFill);
+    this.ghostGroup.visible = false;
+    this.group.add(this.ghostGroup);
+  }
+
+  setGhost(ghost: boolean) {
+    this.ghostGroup.visible = ghost;
+    this.waterGroup.visible = !ghost;
+    for (const f of this.fish) f.group.visible = !ghost;
+    this.group.children.forEach((c) => {
+      if (c !== this.ghostGroup && c !== this.waterGroup && !this.fish.some((f) => f.group === c)) c.visible = !ghost;
+    });
+  }
+
+  setFish(speciesList: Species[]) {
+    for (const f of this.fish) {
+      this.group.remove(f.group);
+      f.dispose();
+    }
+    this.fish.length = 0;
+    const minCm = Math.min(this.tier.length_cm, this.tier.depth_cm, this.tier.height_cm);
+    for (const s of speciesList) {
+      const f = new Fish(s, fishLengthM(s, minCm));
+      const half = this.halfInner();
+      f.pickTarget(half.clone().multiplyScalar(0.6));
+      f.group.position.copy(f.target).setY(f.target.y + this.swimCentreY());
+      f.pickTarget(half.clone().multiplyScalar(0.6));
+      this.fish.push(f);
+      this.group.add(f.group);
+    }
+  }
+
+  /** Half extents of the swimmable volume, relative to its centre. */
+  private halfInner() {
+    const sandH = Math.max(0.015, this.size.y * 0.08);
+    const waterH = this.size.y * 0.93;
+    return new THREE.Vector3(this.size.x / 2, (waterH - sandH) / 2, this.size.z / 2);
+  }
+
+  private swimCentreY() {
+    const sandH = Math.max(0.015, this.size.y * 0.08);
+    return sandH + (this.size.y * 0.93 - sandH) / 2;
+  }
+
+  dropFood() {
+    const mat = this.track(new THREE.MeshStandardMaterial({ color: '#c8743a', roughness: 0.8 }));
+    const geo = this.track(new THREE.SphereGeometry(Math.max(0.0025, this.size.x * 0.008), 6, 4));
+    for (let i = 0; i < 8; i++) {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set((Math.random() - 0.5) * this.size.x * 0.5, this.size.y * 0.92, (Math.random() - 0.5) * this.size.z * 0.5);
+      this.group.add(m);
+      this.pellets.push({ mesh: m, vy: 0 });
+    }
+  }
+
+  update(dt: number, time: number) {
+    const half = this.halfInner();
+    const cy = this.swimCentreY();
+
+    // Pellets sink slowly
+    for (const p of this.pellets) {
+      p.vy = Math.max(-0.035, p.vy - dt * 0.05);
+      p.mesh.position.y = Math.max(this.size.y * 0.09, p.mesh.position.y + p.vy * dt);
+    }
+
+    for (const f of this.fish) {
+      let foodLocal: THREE.Vector3 | null = null;
+      let nearest: { mesh: THREE.Mesh } | null = null;
+      let best = Infinity;
+      for (const p of this.pellets) {
+        const d = p.mesh.position.distanceToSquared(f.group.position.clone().setY(f.group.position.y + cy));
+        if (d < best) { best = d; nearest = p; }
+      }
+      if (nearest) foodLocal = nearest.mesh.position.clone().setY(nearest.mesh.position.y - cy);
+      // Fish positions are kept relative to the swim-volume centre.
+      f.group.position.y -= cy;
+      f.update(dt, time, half, foodLocal);
+      if (nearest && foodLocal && f.group.position.distanceTo(foodLocal) < f.length * 0.35) {
+        this.group.remove(nearest.mesh);
+        this.pellets = this.pellets.filter((p) => p !== nearest);
+      }
+      f.group.position.y += cy;
+    }
+
+    // Gentle surface shimmer
+    const pos = this.surface.geometry.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      pos.setZ(i, Math.sin(x * 40 + time * 1.7) * 0.0015 + Math.cos(y * 35 + time * 1.3) * 0.0015);
+    }
+    pos.needsUpdate = true;
+    this.light.intensity = this.light.userData.base ?? (this.light.userData.base = this.light.intensity);
+    this.light.intensity = this.light.userData.base * (0.92 + Math.sin(time * 1.1) * 0.08);
+  }
+
+  private track<T extends { dispose(): void }>(d: T): T {
+    this.disposables.push(d);
+    return d;
+  }
+
+  dispose() {
+    for (const f of this.fish) f.dispose();
+    for (const d of this.disposables) d.dispose();
+    this.spot.shadow.map?.dispose();
+  }
+}
+
+function mulberry32(a: number) {
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Smooth, lumpy rock: subdivided icosahedron with seeded radial noise. */
+function rockGeometry(r: number, rng: () => number) {
+  const g = new THREE.IcosahedronGeometry(r, 3);
+  const pos = g.attributes.position as THREE.BufferAttribute;
+  const k = [rng() * 6, rng() * 6, rng() * 6];
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).normalize();
+    const n = 1 + 0.18 * Math.sin(v.x * 3 + k[0]) * Math.cos(v.y * 4 + k[1]) + 0.1 * Math.sin(v.z * 5 + k[2]);
+    v.multiplyScalar(r * n);
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
