@@ -100,3 +100,11 @@ scripts/                    gen-static, local DB test runner, live API attack te
 1. Realistic direction (small tanks: clownfish, gobies, shrimp; tangs only in big tanks; add long 90/120 cm tanks) or keep all three tangs in every tank? Real tangs need far bigger tanks than 30–60 cm cubes.
 2. Is the 1 × 2 m tank the final tier?
 3. Desktop only or phones too? Monetization planned? (Vercel Hobby forbids commercial use.)
+
+## Infrastructure (as of 2026-11-08)
+
+- GitHub: `hoanganh-1997/reed-3d` (public; `main` auto-deploys to Vercel).
+- Vercel: project `reef-3d` (Hobby, team `hoanganhtx27697-gmailcoms-projects`), production https://reef-3d.vercel.app. Env vars `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (public values) set for all environments.
+- Supabase: project `reef-3d`, ref `nwsdjsubimxylrvmahja`, region ap-southeast-1, Free plan. Migrations in `supabase/migrations/` have been applied.
+- Supabase Auth **Site URL / Redirect URLs** must include https://reef-3d.vercel.app so sign-up confirmation emails land on the game (dashboard → Authentication → URL Configuration).
+- Test accounts `reef-test-a@reef3d.test`, `reef-test-b@reef3d.test` exist (pre-confirmed, created via SQL; passwords are not in the repo). Delete them before any public launch.
