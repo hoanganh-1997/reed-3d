@@ -177,6 +177,33 @@ begin
   raise notice 'ok buy_fish';
 end $$;
 select pg_temp.expect_error($q$select public.buy_fish('yellow_tang')$q$, '%tank_full%');
+-- Invertebrates: no fish slot, but their own per-species cap and min tank.
+select pg_temp.expect_error($q$select public.buy_fish('red_starfish')$q$, '%tank_too_small%');
+reset role;
+update public.tanks set tier_id = 'cube40' where user_id = :alice;
+update public.profiles set coins = 5000 where user_id = :alice;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :alice, false);
+select public.buy_fish('foxface') is not null as filled_last_fish_slot;
+select pg_temp.expect_error($q$select public.buy_fish('yellow_tang')$q$, '%tank_full%');
+do $$
+declare s jsonb; cap int := (select max_per_tank from public.species where id = 'red_starfish'); i int;
+begin
+  for i in 1..cap loop s := public.buy_fish('red_starfish'); end loop;
+  if (select count(*) from public.tank_fish where species_id = 'red_starfish') <> cap then raise exception 'starfish not added'; end if;
+  raise notice 'ok buy % starfish in a full fish tank', cap;
+end $$;
+select pg_temp.expect_error($q$select public.buy_fish('red_starfish')$q$, '%species_limit%');
+reset role;
+update public.profiles set level = 1 where user_id = :alice;
+delete from public.tank_fish where user_id = :alice and species_id = 'red_starfish';
+set role authenticated;
+select set_config('request.jwt.claim.sub', :alice, false);
+select pg_temp.expect_error($q$select public.buy_fish('red_starfish')$q$, '%level_too_low%');
+reset role;
+update public.profiles set level = 8 where user_id = :alice;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :alice, false);
 select pg_temp.expect_error($q$insert into public.tank_fish (tank_id, user_id, species_id) select id, user_id, 'naso_tang' from public.tanks$q$, '%permission denied%');
 reset role;
 set role anon;

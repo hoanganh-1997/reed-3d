@@ -142,8 +142,10 @@ export class Hud {
     </div>`;
   }
 
-  render(state: PlayerState, shownTier: TankTier, preview: boolean, tank: Tank | null, fishCount: number) {
+  render(state: PlayerState, shownTier: TankTier, preview: boolean, tank: Tank | null, inTank: Species[]) {
     const p = state.profile;
+    const fishCount = inTank.filter((s) => s.kind !== 'invert').length;
+    const invertCount = inTank.length - fishCount;
     this.$('[data-ref=level]').textContent = String(p.level);
     this.$('[data-ref=level2]').textContent = String(p.level);
     const pct = Math.min(100, (p.xp / p.xp_to_next) * 100);
@@ -156,7 +158,7 @@ export class Hud {
     this.$('[data-ref=tankname]').textContent = `Bể ${shownTier.name}`;
     this.$('[data-ref=tankmeta]').textContent = preview
       ? `Xem trước · ${fmt.format(volumeLiters(shownTier))} lít`
-      : `${fmt.format(volumeLiters(shownTier))} lít · ${fishCount} cá`;
+      : `${fmt.format(volumeLiters(shownTier))} lít · ${fishCount} cá${invertCount ? ` · ${invertCount} sao biển` : ''}`;
 
     const meters: [string, number][] = tank
       ? [['food', tank.food], ['clean', tank.cleanliness], ['health', tank.health]]
@@ -183,7 +185,7 @@ export class Hud {
       buy.textContent = `Mua · ${fmt.format(shownTier.unlock_cost_coins)} xu`;
     }
     this.renderShop(state, currentTier);
-    this.renderFishShop(state, currentTier, fishCount);
+    this.renderFishShop(state, currentTier, fishCount, inTank);
   }
 
   /** What the shop can offer for `tier` given the player's current tank, level and coins. */
@@ -219,28 +221,31 @@ export class Hud {
   }
 
   /** Why a species can or cannot be bought for the current tank. */
-  private fishOffer(sp: Species, current: TankTier, state: PlayerState, fishCount: number) {
+  private fishOffer(sp: Species, current: TankTier, state: PlayerState, fishCount: number, sameCount: number) {
     const p = state.profile;
     const min = this.data.tiers.find((t) => t.id === sp.min_tier);
     if (p.level < sp.unlock_level) return { kind: 'level' as const, text: `Cần cấp ${sp.unlock_level}` };
     if (min && current.sort_order < min.sort_order) return { kind: 'tank' as const, text: `Cần bể ${min.label}` };
-    if (fishCount >= current.max_fish) return { kind: 'full' as const, text: 'Bể đã đầy' };
+    if (sp.kind !== 'invert' && fishCount >= current.max_fish) return { kind: 'full' as const, text: 'Bể đã đầy' };
+    if ((sp.kind === 'invert' || sp.max_per_tank != null) && sameCount >= (sp.max_per_tank ?? 0)) return { kind: 'full' as const, text: `Tối đa ${sp.max_per_tank ?? 0} con` };
     if (p.coins < sp.price_coins) return { kind: 'coins' as const, text: `Thiếu ${fmt.format(sp.price_coins - p.coins)} xu` };
     return { kind: 'buy' as const, text: '' };
   }
 
-  private renderFishShop(state: PlayerState, current: TankTier, fishCount: number) {
+  private renderFishShop(state: PlayerState, current: TankTier, fishCount: number, inTank: Species[]) {
     this.$('[data-ref=fishcap]').textContent = `Bể ${current.label}: ${fishCount}/${current.max_fish} cá. Cá mới được thả vào bể hiện tại.`;
     const list = [...this.data.species].sort((a, b) => a.unlock_level - b.unlock_level || a.price_coins - b.price_coins);
     this.$('[data-ref=fishlist]').innerHTML = list
       .map((sp) => {
-        const o = this.fishOffer(sp, current, state, fishCount);
+        const same = inTank.filter((x) => x.id === sp.id).length;
+        const o = this.fishOffer(sp, current, state, fishCount, same);
+        const cap = sp.max_per_tank != null ? ` · ${same}/${sp.max_per_tank} trong bể` : '';
         const min = this.data.tiers.find((t) => t.id === sp.min_tier);
         const action = o.kind === 'buy'
           ? `<button class="btn buy" data-act="buy-fish" data-species="${sp.id}">Mua</button>`
           : `<span class="tag ${o.kind === 'level' ? 'locked' : ''}">${o.kind === 'level' ? ICONS.lock + ' ' : ''}${o.text}</span>`;
         return `<div class="shop-row fish ${o.kind}">
-          <div class="shop-size"><span><span class="swatch" style="background:${sp.body_color}"></span><b>${sp.display_name ?? sp.common_name}</b></span><small><i>${sp.scientific_name}</i> · ${sp.adult_length_cm} cm</small></div>
+          <div class="shop-size"><span><span class="swatch" style="background:${sp.body_color}"></span><b>${sp.display_name ?? sp.common_name}</b></span><small><i>${sp.scientific_name}</i> · ${sp.adult_length_cm} cm${sp.kind === 'invert' ? ' · không tính chỗ cá' : ''}${cap}</small></div>
           <div class="shop-meta"><span>Cấp ${sp.unlock_level} · bể từ ${min?.label ?? ''}</span><span class="price">${ICONS.coin}${fmt.format(sp.price_coins)}</span></div>
           <div class="shop-act">${action}</div>
         </div>`;

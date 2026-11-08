@@ -33,6 +33,10 @@ export interface Species {
   /** Shop: level needed to buy, and price in coins. min_tier is the smallest tank it may live in. */
   unlock_level: number;
   price_coins: number;
+  /** 'fish' swim and use the tank's max_fish slots; 'invert' (starfish) rest on rocks/sand and only count against max_per_tank. */
+  kind: 'fish' | 'invert';
+  /** Per-tank cap for this species (null = no cap besides max_fish). */
+  max_per_tank: number | null;
 }
 
 export interface StaticData {

@@ -134,7 +134,9 @@
       "model_forward": "-x",
       "display_name": "Tang vàng",
       "unlock_level": 1,
-      "price_coins": 120
+      "price_coins": 120,
+      "kind": "fish",
+      "max_per_tank": null
     },
     {
       "id": "regal_blue_tang",
@@ -150,7 +152,9 @@
       "model_forward": "-x",
       "display_name": "Tang xanh",
       "unlock_level": 5,
-      "price_coins": 200
+      "price_coins": 200,
+      "kind": "fish",
+      "max_per_tank": null
     },
     {
       "id": "achilles_tang",
@@ -166,7 +170,9 @@
       "model_forward": "-x",
       "display_name": "Tang Achilles",
       "unlock_level": 12,
-      "price_coins": 350
+      "price_coins": 350,
+      "kind": "fish",
+      "max_per_tank": null
     },
     {
       "id": "naso_tang",
@@ -182,7 +188,9 @@
       "model_forward": "-x",
       "display_name": "Naso tang",
       "unlock_level": 20,
-      "price_coins": 500
+      "price_coins": 500,
+      "kind": "fish",
+      "max_per_tank": null
     },
     {
       "id": "foxface",
@@ -198,7 +206,27 @@
       "model_forward": "-x",
       "display_name": "Foxface",
       "unlock_level": 8,
-      "price_coins": 250
+      "price_coins": 250,
+      "kind": "fish",
+      "max_per_tank": null
+    },
+    {
+      "id": "red_starfish",
+      "common_name": "Red starfish",
+      "scientific_name": "Fromia milleporella",
+      "adult_length_cm": 8,
+      "min_tier": "cube40",
+      "starter": false,
+      "body_color": "#d8321e",
+      "fin_color": "#b8261a",
+      "accent_color": "#7a1410",
+      "model_url": null,
+      "model_forward": "+x",
+      "display_name": "Sao biển đỏ",
+      "unlock_level": 6,
+      "price_coins": 150,
+      "kind": "invert",
+      "max_per_tank": 6
     }
   ],
   "visual": {
