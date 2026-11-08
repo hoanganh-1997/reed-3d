@@ -33,7 +33,8 @@ uniform float uTime; uniform float uAmp; uniform float uFreq; uniform float uSpe
         `#include <begin_vertex>
 float swimT = clamp((uHeadX - position.x) / uLen, 0.0, 1.0);
 float swimEnv = 0.12 + swimT * swimT;
-transformed.z += sin(position.x * uFreq + uTime * uSpeed) * uAmp * swimEnv;`,
+// uTime is the integrated wave phase (see Fish.update), so speed changes never jump the phase.
+transformed.z += sin(position.x * uFreq + uTime) * uAmp * swimEnv;`,
       );
   };
   material.customProgramCacheKey = () => 'swim-wave';
@@ -87,7 +88,7 @@ export class Fish {
   readonly length: number;
   velocity = new THREE.Vector3();
   target = new THREE.Vector3();
-  private phase = Math.random() * 100;
+  private wavePhase = Math.random() * 100;
   private materials: THREE.Material[] = [];
   /** Materials that self-glow so colours stay readable under blue light. */
   private glowMats: THREE.MeshStandardMaterial[] = [];
@@ -233,10 +234,15 @@ export class Fish {
       this.group.quaternion.slerp(q, Math.min(1, dt * 3));
     }
 
+    // Integrate the tail-beat phase. Using time * speed directly made the phase
+    // jump whenever speed changed (time is large), which looked like a jerking tail.
     const rel = speed / Math.max(1e-4, this.length);
-    this.uniforms.uSpeed.value = 5 + rel * 6;
-    this.uniforms.uAmp.value = 0.04 + Math.min(0.06, rel * 0.03);
-    this.uniforms.uTime.value = time + this.phase;
+    const k = 1 - Math.exp(-dt * 2.5); // ease beat rate and amplitude
+    this.uniforms.uSpeed.value += (5 + rel * 6 - this.uniforms.uSpeed.value) * k;
+    this.uniforms.uAmp.value += (0.04 + Math.min(0.06, rel * 0.03) - this.uniforms.uAmp.value) * k;
+    this.wavePhase = (this.wavePhase + this.uniforms.uSpeed.value * dt) % (Math.PI * 2000);
+    this.uniforms.uTime.value = this.wavePhase;
+    void time;
   }
 
   pickTarget(limit: THREE.Vector3) {
