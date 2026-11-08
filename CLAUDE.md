@@ -15,7 +15,7 @@ Language: talk to the owner (Andy) in Vietnamese; code, identifiers, comments an
 ## Decided
 
 - Hosting: **Vercel** (frontend) + **Supabase** (Postgres, Auth). Vercel Hobby = personal, non-commercial only.
-- First fish: yellow tang (*Zebrasoma flavescens*), regal blue tang (*Paracanthurus hepatus*), Achilles tang (*Acanthurus achilles*). Models come from an AI image → image-to-3D pipeline; until GLBs exist, use the procedural placeholder in `src/scene/fish.ts`.
+- First fish: yellow tang (*Zebrasoma flavescens*), regal blue tang (*Paracanthurus hepatus*), Achilles tang (*Acanthurus achilles*). Models come from an AI image → image-to-3D pipeline. GLBs for all three live in `public/models/<species>.<hash>.glb` (2026-11-08), set via `species.model_url` + `model_forward` (head axis) in config; species without a model fall back to the procedural placeholder in `src/scene/fish.ts`.
 - Visual style: semi-realistic, warm, room at sunset; the tank is the brightest light source. **Never mix low-poly and semi-realistic models.**
 - Tank lighting (2026-11-08, Andy): reef tanks are lit **blue/actinic** (reference: blue LED reef tank with fluorescent corals). The room stays warm sunset; only the tank is blue. Colours live in `config/game.json` → `visual` (client-only).
 - Camera: players can orbit to see the tank from **three sides** (front, left, right; azimuth up to ±90°, limited so the camera never leaves the room), zoom in/out, double-click to return to the front framing. Props that block the view fade out.
