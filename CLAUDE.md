@@ -42,6 +42,8 @@ After editing, run `npm run gen:static` → it writes a **new timestamped migrat
 
 Camera framing (`framingFor` in `src/scene/world.ts`) and the stand size are derived from tier dimensions, so new tiers (e.g. 90/120 cm long tanks) need only a config row.
 
+Fish shop (2026-11-08, proposed to Andy): each species has `display_name`, `unlock_level`, `price_coins`, `min_tier` (smallest tank, based on real adult size). Per-tank limit is `tank_tiers.max_fish`. Decor rocks are 5 CC0 Poly Haven GLBs (`visual.rock_models`).
+
 Assets (later phases):
 - Fish: GLB, ~500–3,000 tris, 1K textures, fins as flat alpha meshes.
 - Furniture: prefer CC0 (Poly Haven). Every asset gets a row in `ASSETS_CREDITS.md` (link, author, license).
@@ -66,6 +68,7 @@ Assets (later phases):
 | `upgrade_tank(p_tier_id)` | shop purchase: target must be bigger than the current tank, `level >= unlock_level`, `coins >= unlock_cost_coins`; deducts coins and changes the tank's tier in place (fish/meters kept). `unlock_tank`/`select_tank` are no longer executable by players (one-tank model). |
 | `feed_tank(p_tank_id)` | +food; XP/coins only if food was below `feed_reward_below` (anti-spam) |
 | `change_water(p_tank_id)` | cleanliness = 100; XP/coins only if it was below `water_reward_below` |
+| `buy_fish(p_species_id)` | fish shop: `level >= species.unlock_level`, tank at least `species.min_tier`, fewer than `tier.max_fish` fish, `coins >= price_coins`; adds the fish to the player's tank |
 
 ## Layout
 
