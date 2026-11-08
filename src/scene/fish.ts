@@ -93,7 +93,7 @@ export class Fish {
   private phase = Math.random() * 100;
   private materials: THREE.Material[] = [];
 
-  constructor(public species: Species, lengthM: number) {
+  constructor(public species: Species, lengthM: number, model?: THREE.Object3D | null) {
     this.length = lengthM;
     const L = 1; // build at unit length, scale the group
     this.uniforms = {
@@ -104,6 +104,12 @@ export class Fish {
       uHeadX: { value: 0.5 * L },
       uLen: { value: 1.0 * L },
     };
+
+    if (model) {
+      this.buildFromModel(model);
+      this.group.scale.setScalar(lengthM);
+      return;
+    }
 
     const bodyMat = new THREE.MeshStandardMaterial({ color: species.body_color, emissive: species.body_color, emissiveIntensity: FISH_GLOW, roughness: 0.45, metalness: 0.05 });
     const finMat = new THREE.MeshStandardMaterial({
@@ -160,6 +166,32 @@ export class Fish {
     this.group.scale.setScalar(lengthM);
   }
 
+  /** Use a normalised GLB (see models.ts): clone meshes, give each its own swim-wave material. */
+  private buildFromModel(model: THREE.Object3D) {
+    model.traverse((o) => {
+      const src = o as THREE.Mesh;
+      if (!src.isMesh) return;
+      const mats = (Array.isArray(src.material) ? src.material : [src.material]).map((m) => {
+        const mat = (m as THREE.MeshStandardMaterial).clone();
+        // Keep colours readable under blue actinic light (texture-driven self glow).
+        if (mat.map && 'emissiveMap' in mat) {
+          mat.emissive = new THREE.Color('#ffffff');
+          mat.emissiveMap = mat.map;
+          mat.emissiveIntensity = gameConfig.visual.model_fish_glow;
+        }
+        applySwimWave(mat, this.uniforms);
+        this.materials.push(mat);
+        return mat;
+      });
+      const mesh = new THREE.Mesh(src.geometry, Array.isArray(src.material) ? mats : mats[0]);
+      mesh.castShadow = true;
+      this.group.add(mesh);
+    });
+    this.sharedGeometry = true;
+  }
+
+  private sharedGeometry = false;
+
   /** Called every frame with tank-local bounds (half extents, metres). */
   update(dt: number, time: number, half: THREE.Vector3, food: THREE.Vector3 | null) {
     const p = this.group.position;
@@ -208,12 +240,14 @@ export class Fish {
   }
 
   dispose() {
-    this.group.traverse((o) => {
-      if (o instanceof THREE.Mesh) o.geometry.dispose();
-    });
+    if (!this.sharedGeometry) {
+      this.group.traverse((o) => {
+        if (o instanceof THREE.Mesh) o.geometry.dispose();
+      });
+    }
     for (const m of this.materials) {
-      const map = (m as THREE.MeshStandardMaterial).map;
-      map?.dispose();
+      // Model textures are shared through the cache; only placeholder textures are owned.
+      if (!this.sharedGeometry) (m as THREE.MeshStandardMaterial).map?.dispose();
       m.dispose();
     }
   }

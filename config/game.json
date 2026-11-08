@@ -130,7 +130,8 @@
       "body_color": "#f6cf2f",
       "fin_color": "#f2b81d",
       "accent_color": "#ffffff",
-      "model_url": null
+      "model_url": "/models/yellow_tang.94281b4537.glb",
+      "model_forward": "-x"
     },
     {
       "id": "regal_blue_tang",
@@ -142,7 +143,8 @@
       "body_color": "#1f5fd6",
       "fin_color": "#f2c230",
       "accent_color": "#0b1530",
-      "model_url": null
+      "model_url": "/models/regal_blue_tang.3da5176437.glb",
+      "model_forward": "-x"
     },
     {
       "id": "achilles_tang",
@@ -154,7 +156,8 @@
       "body_color": "#1b1d24",
       "fin_color": "#ff6a1f",
       "accent_color": "#ff7a2a",
-      "model_url": null
+      "model_url": "/models/achilles_tang.34c76cd3ec.glb",
+      "model_forward": "-x"
     }
   ],
   "visual": {
@@ -175,6 +178,7 @@
     ],
     "fish_glow": 0.32,
     "tank_glow_intensity": 1.4,
-    "tank_light_intensity": 6
+    "tank_light_intensity": 6,
+    "model_fish_glow": 1.1
   }
 }

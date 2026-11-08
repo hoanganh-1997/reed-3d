@@ -18,6 +18,7 @@ async function main() {
   const backend = createBackend();
   const world = new World(document.getElementById('scene')!);
   const data: StaticData = await backend.loadStatic();
+  world.preloadFishModels(data.species);
 
   // Show the starter tank behind the sign-in card.
   const starter = data.tiers.find((t) => t.id === data.settings.starter_tier) ?? data.tiers[0];

@@ -26,6 +26,8 @@ export interface Species {
   fin_color: string;
   accent_color: string;
   model_url: string | null;
+  /** Which model axis the head points along: '+x' | '-x' | '+z' | '-z'. */
+  model_forward: string;
 }
 
 export interface StaticData {

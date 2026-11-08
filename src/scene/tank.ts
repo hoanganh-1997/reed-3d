@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Species, TankTier } from '../game/types';
 import { Fish, fishLengthM } from './fish';
+import { cachedFishModel, type Axis } from './models';
 import gameConfig from '../../config/game.json';
 
 const LOOK = gameConfig.visual;
@@ -171,7 +172,8 @@ export class Tank {
     this.fish.length = 0;
     const minCm = Math.min(this.tier.length_cm, this.tier.depth_cm, this.tier.height_cm);
     for (const s of speciesList) {
-      const f = new Fish(s, fishLengthM(s, minCm));
+      const model = s.model_url ? cachedFishModel(s.model_url, s.model_forward as Axis) : null;
+      const f = new Fish(s, fishLengthM(s, minCm), model);
       const half = this.halfInner();
       f.pickTarget(half.clone().multiplyScalar(0.6));
       f.group.position.copy(f.target).setY(f.target.y + this.swimCentreY());

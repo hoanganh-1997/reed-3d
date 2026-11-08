@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { Species, TankTier } from '../game/types';
 import { Room, ROOM } from './room';
 import { Tank, standHeightFor } from './tank';
+import { loadFishModel, type Axis } from './models';
 
 interface Framing {
   pos: THREE.Vector3;
@@ -57,6 +58,8 @@ export class World {
   readonly room = new Room();
   private tank: Tank | null = null;
   private tier: TankTier | null = null;
+  private shownFish: Species[] = [];
+  private ghost = false;
   private goal: Framing | null = null;
   private lookAt = new THREE.Vector3();
   private timer = new THREE.Timer();
@@ -113,6 +116,8 @@ export class World {
       this.scene.add(this.tank.group);
       this.tier = tier;
     }
+    this.shownFish = fish;
+    this.ghost = ghost;
     if (!sameTier || !ghost) this.tank!.setFish(ghost ? [] : fish);
     this.tank!.setGhost(ghost);
     this.room.setStand(tier.length_cm / 100, tier.depth_cm / 100, standHeightFor(tier), instant);
@@ -127,6 +132,16 @@ export class World {
     this.baseDist = this.goal.pos.distanceTo(this.goal.target);
     this.controls.minDistance = this.baseDist * 0.45;
     this.controls.maxDistance = this.baseDist * 1.1;
+  }
+
+  /** Start loading GLB fish; swap them in for placeholders as they arrive. */
+  preloadFishModels(species: Species[]) {
+    for (const s of species) {
+      if (!s.model_url) continue;
+      loadFishModel(s.model_url, s.model_forward as Axis).then(() => {
+        if (this.tank && !this.ghost && this.shownFish.some((f) => f.id === s.id)) this.tank.setFish(this.shownFish);
+      }, () => {});
+    }
   }
 
   dropFood() {

@@ -13,6 +13,7 @@ const { chromium } = require('playwright');
   for (const id of tiers) {
     await page.click(`.tier[data-tier=${id}]`);
     await page.waitForTimeout(2600);
+    if (process.env.ZOOM) { await page.mouse.move(720, 380); for (let i = 0; i < +process.env.ZOOM; i++) { await page.mouse.wheel(0, -200); await page.waitForTimeout(150); } await page.waitForTimeout(2500); }
     await page.screenshot({ path: `${out}/${w}x${h}-${id}.png` });
   }
   console.log(logs.join('\n'));
