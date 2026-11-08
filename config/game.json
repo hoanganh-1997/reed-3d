@@ -234,13 +234,6 @@
       "model_fish_glow": 0.9,
       "water_back": "#1446c8"
     },
-    "coral_colors": [
-      "#5cff9a",
-      "#ff5fc8",
-      "#3ff0ff",
-      "#ffa04a",
-      "#c9ff4a"
-    ],
     "rock_models": [
       "/models/rocks/rock_boulder_01.0d2f2f9ed3.glb",
       "/models/rocks/rock_moon_rock_04.df93454e4f.glb",

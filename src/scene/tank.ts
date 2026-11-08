@@ -6,7 +6,6 @@ import gameConfig from '../../config/game.json';
 import type { Look } from './look';
 import { WaterFx, waveAmplitude, waveHeight } from './water';
 
-const CORAL_COLORS = gameConfig.visual.coral_colors;
 const ROCK_MODELS: string[] = gameConfig.visual.rock_models ?? [];
 
 /** Height of the stand top for a tier (metres). Large tanks sit on a lower stand. */
@@ -113,14 +112,12 @@ export class Tank {
       m.position.set((rng() - 0.5) * L * 0.75, sandH + r * 0.4, -D * 0.25 + (rng() - 0.5) * D * 0.3);
       m.rotation.set(rng() * 3, rng() * 3, rng() * 3);
       m.castShadow = true;
-      const coral = this.coralCluster(m.position, r, rng);
-      rocks.add(m, coral);
+      rocks.add(m);
       // Swap the procedural placeholder for a real rock model once it has loaded.
       if (ROCK_MODELS.length) {
         const url = ROCK_MODELS[Math.floor(rng() * ROCK_MODELS.length)];
         const size = Math.min(L, D) * (0.3 + rng() * 0.2);
         const yaw = rng() * Math.PI * 2;
-        const coralSeed = Math.floor(rng() * 1e6);
         const at = m.position.clone();
         loadRockModel(url).then((src) => {
           if (this.disposed) return;
@@ -128,11 +125,8 @@ export class Tank {
           rock.scale.setScalar(size);
           rock.rotation.y = yaw;
           rock.position.set(at.x, sandH - size * 0.04, at.z);
-          rock.updateMatrixWorld(true);
-          const h = new THREE.Box3().setFromObject(rock).max.y - rock.position.y;
-          const cr = size * 0.32;
-          rocks.remove(m, coral);
-          rocks.add(rock, this.coralCluster(new THREE.Vector3(at.x, sandH + h - cr * 0.85, at.z), cr, mulberry32(coralSeed)));
+          rocks.remove(m);
+          rocks.add(rock);
         }, () => {});
       }
     }
@@ -173,27 +167,6 @@ export class Tank {
     this.ghostGroup.add(ghostEdges, ghostFill);
     this.ghostGroup.visible = false;
     this.group.add(this.ghostGroup);
-  }
-
-  /** Placeholder fluorescent corals sitting on a rock (glow under actinic light). */
-  private coralCluster(at: THREE.Vector3, r: number, rng: () => number) {
-    const g = new THREE.Group();
-    const n = 2 + Math.floor(rng() * 3);
-    for (let i = 0; i < n; i++) {
-      const color = CORAL_COLORS[Math.floor(rng() * CORAL_COLORS.length)];
-      const mat = this.track(new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.55, roughness: 0.6 }));
-      const branching = rng() > 0.5;
-      const geo = this.track(branching
-        ? new THREE.CylinderGeometry(r * 0.12, r * 0.18, r * (0.8 + rng() * 0.6), 10)
-        : new THREE.SphereGeometry(r * (0.3 + rng() * 0.15), 16, 12));
-      const m = new THREE.Mesh(geo, mat);
-      const a = rng() * Math.PI * 2;
-      m.position.set(at.x + Math.cos(a) * r * 0.5, at.y + r * (branching ? 0.95 : 0.7), at.z + Math.abs(Math.sin(a)) * r * 0.5);
-      if (branching) m.rotation.set((rng() - 0.5) * 0.6, 0, (rng() - 0.5) * 0.6);
-      else m.scale.y = 0.7;
-      g.add(m);
-    }
-    return g;
   }
 
   setGhost(ghost: boolean) {
