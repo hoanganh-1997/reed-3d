@@ -5,6 +5,7 @@ import { cachedFishModel, loadRockModel, type Axis } from './models';
 import gameConfig from '../../config/game.json';
 import type { Look } from './look';
 import { WaterFx, waveAmplitude, waveHeight } from './water';
+import { Anemone } from './anemone';
 
 const ROCK_MODELS: string[] = gameConfig.visual.rock_models ?? [];
 
@@ -38,6 +39,7 @@ export class Tank {
   private waterFx: WaterFx;
   private spotScale: number;
   private glowScale: number;
+  private anemone: Anemone;
 
   constructor(public tier: TankTier, look: Look) {
     this.look = look;
@@ -152,8 +154,13 @@ export class Tank {
     this.light = new THREE.PointLight('#ffffff', 1, Math.max(1.6, L * 2.5), 1.8);
     this.light.position.set(0, H * 0.6, D * 0.2);
 
+    // Bubble-tip anemone on the sand, front right, clear of the back-row rocks.
+    this.anemone = new Anemone(THREE.MathUtils.clamp(Math.min(L, D) * 0.36, 0.1, 0.24), tier.sort_order);
+    this.anemone.group.position.set(L * 0.24, sandH * 0.85, D * 0.12);
+    this.anemone.group.rotation.y = rng() * Math.PI * 2;
+
     this.waterFx = new WaterFx(L, D, sandH, waterH);
-    this.waterGroup.add(water, this.surface, sand, rocks, this.waterFx.group, this.spot, this.spot.target, this.light, lid);
+    this.waterGroup.add(water, this.surface, sand, rocks, this.anemone.group, this.waterFx.group, this.spot, this.spot.target, this.light, lid);
     this.setLook(look);
     this.group.add(this.waterGroup, glass, edges);
 
@@ -193,6 +200,7 @@ export class Tank {
     this.lidMat.color.copy(look.lid_light);
     this.lidMat.emissive.copy(look.lid_light);
     for (const f of this.fish) f.setGlow(look);
+    this.anemone.setGlow(look);
     this.waterFx.setLook(look);
   }
 
@@ -276,6 +284,7 @@ export class Tank {
     pos.needsUpdate = true;
     this.surface.geometry.computeVertexNormals();
     this.waterFx.update(time);
+    this.anemone.update(time);
     this.light.intensity = this.light.userData.base ?? (this.light.userData.base = this.light.intensity);
     this.light.intensity = this.light.userData.base * (0.92 + Math.sin(time * 1.1) * 0.08);
   }
@@ -292,6 +301,7 @@ export class Tank {
     for (const f of this.fish) f.dispose();
     for (const d of this.disposables) d.dispose();
     this.waterFx.dispose();
+    this.anemone.dispose();
     this.spot.shadow.map?.dispose();
   }
 }

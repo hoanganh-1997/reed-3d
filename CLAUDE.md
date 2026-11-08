@@ -81,6 +81,7 @@ src/scene/world.ts          renderer, camera framing + transitions
 src/scene/room.ts           placeholder room (primitives), stand that resizes with the tank
 src/scene/tank.ts           glass/water/sand/rocks/light + fish container + food pellets
 src/scene/fish.ts           procedural placeholder fish + swim-wave shader
+src/scene/anemone.ts        procedural bubble-tip anemone (instanced tentacles, swaying shader)
 src/ui/                     HUD, auth card, styles
 supabase/migrations/        schema/RLS/RPC + generated static data
 supabase/tests/             SQL tests (run on plain Postgres via local_shim.sql)
