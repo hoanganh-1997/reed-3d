@@ -4,7 +4,7 @@ import { Fish, fishLengthM } from './fish';
 import { cachedFishModel, type Axis } from './models';
 import gameConfig from '../../config/game.json';
 import type { Look } from './look';
-import { WaterFx } from './water';
+import { WaterFx, waveAmplitude, waveHeight } from './water';
 
 const CORAL_COLORS = gameConfig.visual.coral_colors;
 
@@ -31,7 +31,8 @@ export class Tank {
   readonly light: THREE.PointLight;
   readonly spot: THREE.SpotLight;
   private waterMat: THREE.MeshPhysicalMaterial;
-  private surfMat: THREE.MeshStandardMaterial;
+  private surfMat: THREE.MeshPhysicalMaterial;
+  private waveAmp: number;
   private lidMat: THREE.MeshStandardMaterial;
   private look: Look;
   private waterFx: WaterFx;
@@ -76,10 +77,16 @@ export class Tank {
     water.position.y = waterH / 2;
     water.renderOrder = 2;
 
-    const surfMat = (this.surfMat = this.track(new THREE.MeshStandardMaterial({
-      color: '#d4e2ff', emissiveIntensity: 0.3, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide,
+    // Rippling, glossy water surface (normals recomputed each frame so highlights move).
+    const surfMat = (this.surfMat = this.track(new THREE.MeshPhysicalMaterial({
+      color: '#e2eeff', emissiveIntensity: 0.12, roughness: 0.06, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05,
+      transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide,
     })));
-    this.surface = new THREE.Mesh(this.track(new THREE.PlaneGeometry(L, D, 24, 12)), surfMat);
+    this.waveAmp = waveAmplitude(waterH);
+    this.surface = new THREE.Mesh(
+      this.track(new THREE.PlaneGeometry(L, D, Math.min(96, Math.max(24, Math.round(L / 0.012))), Math.min(48, Math.max(12, Math.round(D / 0.012))))),
+      surfMat,
+    );
     this.surface.rotation.x = -Math.PI / 2;
     this.surface.position.y = waterH;
     this.surface.renderOrder = 2;
@@ -267,14 +274,13 @@ export class Tank {
       f.group.position.y += cy;
     }
 
-    // Gentle surface shimmer
+    // Surface ripples (plane local y maps to tank -z after the -90° X rotation).
     const pos = this.surface.geometry.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      const y = pos.getY(i);
-      pos.setZ(i, Math.sin(x * 40 + time * 1.7) * 0.0015 + Math.cos(y * 35 + time * 1.3) * 0.0015);
+      pos.setZ(i, waveHeight(pos.getX(i), -pos.getY(i), time, this.waveAmp));
     }
     pos.needsUpdate = true;
+    this.surface.geometry.computeVertexNormals();
     this.waterFx.update(time);
     this.light.intensity = this.light.userData.base ?? (this.light.userData.base = this.light.intensity);
     this.light.intensity = this.light.userData.base * (0.92 + Math.sin(time * 1.1) * 0.08);

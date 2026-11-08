@@ -4,12 +4,25 @@ import type { Look } from './look';
 /**
  * Cues that make the tank read as full of water:
  * - blue depth gradient on the back pane,
- * - bright waterline (meniscus) on every pane,
+ * - bright waterline (meniscus) on every pane, rippling with the surface,
  * - animated caustics on the sand,
  * - faint light shafts from the lid,
- * - drifting particles and a bubble stream.
  * Local space matches Tank: origin at the centre of the bottom face.
  */
+/** Surface ripple amplitude for a tank of this water height (metres). */
+export function waveAmplitude(waterH: number) {
+  return THREE.MathUtils.clamp(waterH * 0.012, 0.002, 0.007);
+}
+
+/** Height of the water surface at tank-local (x, z): a few crossing ripple trains. */
+export function waveHeight(x: number, z: number, t: number, amp: number) {
+  return amp * (
+    0.45 * Math.sin(x * 9 + t * 1.6) +
+    0.3 * Math.sin(z * 11 - t * 1.25 + x * 3) +
+    0.25 * Math.sin((x + z) * 23 + t * 2.4)
+  );
+}
+
 export class WaterFx {
   readonly group = new THREE.Group();
   private disposables: { dispose(): void }[] = [];
@@ -19,12 +32,11 @@ export class WaterFx {
   private sideMat: THREE.MeshBasicMaterial;
   private lineMat: THREE.MeshBasicMaterial;
   private shaftMat: THREE.MeshBasicMaterial;
-  private particles: THREE.Points;
-  private particleBase: Float32Array;
-  private bubbles: THREE.Points;
-  private bubbleSeed: Float32Array;
+  private lineMeshes: THREE.Mesh[] = [];
+  private amp: number;
 
-  constructor(private L: number, private D: number, sandH: number, private waterH: number) {
+  constructor(L: number, D: number, sandH: number, waterH: number) {
+    this.amp = waveAmplitude(waterH);
     // Back pane: blue gradient, lighter at the top like light fading with depth.
     this.backMat = this.track(new THREE.MeshBasicMaterial({ map: this.track(gradientTex()), transparent: true, opacity: 0.85, depthWrite: false }));
     const back = new THREE.Mesh(this.track(new THREE.PlaneGeometry(L - 0.004, waterH - sandH * 0.5)), this.backMat);
@@ -51,9 +63,13 @@ export class WaterFx {
       [D, L / 2 - 0.002, 0, Math.PI / 2],
       [D, -L / 2 + 0.002, 0, Math.PI / 2],
     ] as const) {
-      const m = new THREE.Mesh(this.track(new THREE.PlaneGeometry(w, band)), this.lineMat);
+      const geo = this.track(new THREE.PlaneGeometry(w, band, Math.max(8, Math.round(w / 0.01)), 1));
+      const m = new THREE.Mesh(geo, this.lineMat);
       m.position.set(x, waterH - band / 2, z);
       m.rotation.y = ry;
+      m.userData.alongX = ry === 0;
+      m.userData.base = (geo.attributes.position.array as Float32Array).slice();
+      this.lineMeshes.push(m);
       m.renderOrder = 4;
       lines.add(m);
     }
@@ -88,38 +104,7 @@ export class WaterFx {
       this.shafts.push(m);
     }
 
-    // Suspended particles.
-    const vol = L * D * waterH;
-    const n = Math.round(THREE.MathUtils.clamp(vol * 6000, 120, 900));
-    this.particleBase = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) {
-      this.particleBase[i * 3] = (Math.random() - 0.5) * L * 0.96;
-      this.particleBase[i * 3 + 1] = sandH + Math.random() * (waterH - sandH);
-      this.particleBase[i * 3 + 2] = (Math.random() - 0.5) * D * 0.94;
-    }
-    const pg = this.track(new THREE.BufferGeometry());
-    pg.setAttribute('position', new THREE.BufferAttribute(this.particleBase.slice(), 3));
-    const dot = this.track(dotTex());
-    const pm = this.track(new THREE.PointsMaterial({ map: dot, color: '#e8f2ff', size: Math.max(0.002, L * 0.006), transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending }));
-    this.particles = new THREE.Points(pg, pm);
-    this.particles.renderOrder = 4;
-
-    // Bubble stream from a back corner (pump / airstone).
-    const bn = 40;
-    this.bubbleSeed = new Float32Array(bn * 2);
-    for (let i = 0; i < bn; i++) {
-      this.bubbleSeed[i * 2] = Math.random();
-      this.bubbleSeed[i * 2 + 1] = Math.random() * 10;
-    }
-    const bg = this.track(new THREE.BufferGeometry());
-    bg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bn * 3), 3));
-    const bm = this.track(new THREE.PointsMaterial({ map: this.track(bubbleTex()), color: '#ffffff', size: Math.max(0.005, Math.min(0.014, L * 0.02)), transparent: true, opacity: 0.8, depthWrite: false }));
-    this.bubbles = new THREE.Points(bg, bm);
-    this.bubbles.position.set(L * 0.38, 0, -D * 0.32);
-    this.bubbles.userData.base = sandH;
-    this.bubbles.renderOrder = 4;
-
-    this.group.add(back, ...sides, lines, caustics, ...this.shafts, this.particles, this.bubbles);
+    this.group.add(back, ...sides, lines, caustics, ...this.shafts);
   }
 
   setLook(look: Look) {
@@ -140,32 +125,18 @@ export class WaterFx {
     }
     this.shaftMat.opacity = 0.05 + Math.sin(time * 0.4) * 0.015;
 
-    // Particles drift slowly on a gentle current.
-    const pos = this.particles.geometry.attributes.position as THREE.BufferAttribute;
-    const arr = pos.array as Float32Array;
-    const base = this.particleBase;
-    for (let i = 0; i < arr.length; i += 3) {
-      const k = i * 0.37;
-      arr[i] = base[i] + Math.sin(time * 0.15 + k) * this.L * 0.02;
-      arr[i + 1] = base[i + 1] + Math.sin(time * 0.21 + k * 1.7) * 0.006;
-      arr[i + 2] = base[i + 2] + Math.cos(time * 0.13 + k) * this.D * 0.02;
+    // Waterline follows the surface waves.
+    for (const m of this.lineMeshes) {
+      const pos = m.geometry.attributes.position as THREE.BufferAttribute;
+      const base = m.userData.base as Float32Array;
+      for (let i = 0; i < pos.count; i++) {
+        const lx = base[i * 3];
+        const wx = m.userData.alongX ? lx + m.position.x : m.position.x;
+        const wz = m.userData.alongX ? m.position.z : m.position.z - lx;
+        pos.setY(i, base[i * 3 + 1] + waveHeight(wx, wz, time, this.amp));
+      }
+      pos.needsUpdate = true;
     }
-    pos.needsUpdate = true;
-
-    // Bubbles rise, wobble, and restart at the bottom.
-    const bpos = this.bubbles.geometry.attributes.position as THREE.BufferAttribute;
-    const barr = bpos.array as Float32Array;
-    const y0 = this.bubbles.userData.base as number;
-    const span = this.waterH - y0;
-    const speed = 0.11;
-    for (let i = 0; i < barr.length / 3; i++) {
-      const t = (this.bubbleSeed[i * 2] + (time * speed) / span) % 1;
-      const ph = this.bubbleSeed[i * 2 + 1];
-      barr[i * 3] = Math.sin(time * 3 + ph) * 0.004 + (this.bubbleSeed[i * 2] - 0.5) * 0.01;
-      barr[i * 3 + 1] = y0 + t * span;
-      barr[i * 3 + 2] = Math.cos(time * 2.4 + ph) * 0.004;
-    }
-    bpos.needsUpdate = true;
   }
 
   dispose() {
@@ -255,31 +226,5 @@ function shaftTex() {
     v.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = v;
     g.fillRect(0, 0, 64, 128);
-  });
-}
-
-function dotTex() {
-  return canvas(32, 32, (g) => {
-    const r = g.createRadialGradient(16, 16, 0, 16, 16, 16);
-    r.addColorStop(0, 'rgba(255,255,255,1)');
-    r.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = r;
-    g.fillRect(0, 0, 32, 32);
-  });
-}
-
-function bubbleTex() {
-  return canvas(32, 32, (g) => {
-    g.strokeStyle = 'rgba(255,255,255,0.9)';
-    g.lineWidth = 2;
-    g.beginPath();
-    g.arc(16, 16, 12, 0, Math.PI * 2);
-    g.stroke();
-    g.fillStyle = 'rgba(255,255,255,0.25)';
-    g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.95)';
-    g.beginPath();
-    g.arc(11, 11, 3, 0, Math.PI * 2);
-    g.fill();
   });
 }
