@@ -97,3 +97,38 @@ export function loadRockModel(url: string): Promise<THREE.Object3D> {
   }
   return p;
 }
+
+/**
+ * Invertebrate GLBs (starfish): largest horizontal side 1 unit, origin at the
+ * underside centre, +Y up. Cached like the fish so tanks can swap them in.
+ */
+const invertCache = new Map<string, Promise<THREE.Object3D>>();
+const invertReady = new Map<string, THREE.Object3D>();
+export function loadInvertModel(url: string): Promise<THREE.Object3D> {
+  let p = invertCache.get(url);
+  if (!p) {
+    p = loader.loadAsync(url).then((gltf) => {
+      const root = gltf.scene;
+      root.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(root);
+      const size = box.getSize(new THREE.Vector3());
+      const c = box.getCenter(new THREE.Vector3());
+      const s = 1 / Math.max(1e-6, size.x, size.z);
+      const out = new THREE.Group();
+      const inner = new THREE.Group();
+      inner.add(root);
+      inner.position.set(-c.x * s, -box.min.y * s, -c.z * s);
+      inner.scale.setScalar(s);
+      out.add(inner);
+      invertReady.set(url, out);
+      return out;
+    });
+    p.catch((e) => console.warn('invert model failed, keeping placeholder', url, e));
+    invertCache.set(url, p);
+  }
+  return p;
+}
+
+export function cachedInvertModel(url: string) {
+  return invertReady.get(url) ?? null;
+}

@@ -12,6 +12,7 @@ const ERROR_TEXT: Record<string, string> = {
   tank_too_small: 'Bể hiện tại quá nhỏ cho loài cá này.',
   tank_full: 'Bể đã đầy, hãy nâng cấp bể để thả thêm cá.',
   unknown_species: 'Không tìm thấy loài cá.',
+  species_limit: 'Bể đã có đủ số lượng tối đa của loài này.',
   not_an_upgrade: 'Bể này không lớn hơn bể hiện tại.',
   tank_not_found: 'Không tìm thấy bể.',
   not_authenticated: 'Phiên đăng nhập đã hết. Hãy đăng nhập lại.',
@@ -158,7 +159,7 @@ async function main() {
     const tank = activeTank();
     const shown = previewTier ?? tierOf(tank.tier_id);
     const live = projectTank(tank, data.settings, Date.now(), skewMs);
-    hud.render(state, shown, !!previewTier, live, fishFor(tank.id).length);
+    hud.render(state, shown, !!previewTier, live, fishFor(tank.id));
   }
 
   refreshScene();
