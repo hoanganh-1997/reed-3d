@@ -73,7 +73,8 @@ export class Hud {
         <p data-ref="lockmsg"></p>
         <button data-act="back">Về bể hiện tại</button>
       </div>
-      <nav class="tiers panel" aria-label="Kích thước bể">
+      <!-- Tank sizes move to the shop (2026-11-08); kept hidden until the shop replaces it. -->
+      <nav class="tiers panel" aria-label="Kích thước bể" hidden>
         <div class="tiers-label"><strong>Kích thước bể</strong><span data-ref="next"></span></div>
         <div class="tier-list" data-ref="tiers"></div>
       </nav>
