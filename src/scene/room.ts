@@ -185,6 +185,13 @@ export class Room {
     this.applyStand();
   }
 
+  /** Viewing mode: hide every prop and wall, keep the lights. */
+  setFocus(on: boolean) {
+    for (const c of this.group.children) {
+      if (!(c instanceof THREE.Light) && c !== this.sun.target) c.visible = !on;
+    }
+  }
+
   /** Request a new stand size; it animates in `update`. */
   setStand(tankLengthM: number, tankDepthM: number, standHeightM: number, instant = false) {
     this.goal = { w: tankLengthM + 0.8, d: Math.max(0.42, tankDepthM + 0.08), h: standHeightM, tankW: tankLengthM };

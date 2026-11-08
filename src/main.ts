@@ -68,6 +68,7 @@ async function main() {
     onDecor: () => hud.toast('Trang trí sẽ có ở giai đoạn sau'),
     onCollection: () => hud.toast('Bộ sưu tập sẽ có ở giai đoạn sau'),
     onSettings: () => toggleSettings(),
+    onView: (on) => setViewing(on),
   });
 
   if (backend.mode === 'demo') {
@@ -76,6 +77,19 @@ async function main() {
     banner.textContent = 'Chế độ demo: chưa kết nối Supabase, tiến trình không được lưu';
     app.appendChild(banner);
   }
+
+  function setViewing(on: boolean) {
+    if (on && previewTier) {
+      previewTier = null;
+      refreshScene();
+    }
+    if (on && settingsEl) toggleSettings();
+    app.classList.toggle('viewing', on);
+    world.setFocus(on);
+  }
+  addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && app.classList.contains('viewing')) setViewing(false);
+  });
 
   let settingsEl: HTMLElement | null = null;
   async function toggleSettings() {

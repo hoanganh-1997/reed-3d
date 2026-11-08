@@ -53,6 +53,21 @@ export function framingFor(tier: TankTier, aspect: number): Framing {
   return { pos, target, fov };
 }
 
+/** Viewing mode: the tank alone fills the screen. */
+export function focusFramingFor(tier: TankTier, aspect: number): Framing {
+  const L = tier.length_cm / 100;
+  const H = tier.height_cm / 100;
+  const D = tier.depth_cm / 100;
+  const standH = standHeightFor(tier);
+  const z = ROOM.backZ + 0.04 + Math.max(0.42, D + 0.08) / 2;
+  const v = THREE.MathUtils.degToRad(BASE_FOV) / 2;
+  const h = Math.atan(Math.tan(v) * aspect);
+  const dist = Math.max((H * 0.95) / 2 / Math.tan(v), (L * 0.88) / 2 / Math.tan(h)) + D * 0.15;
+  const target = new THREE.Vector3(0, standH + H * 0.5, z);
+  const pos = new THREE.Vector3(0, target.y + dist * 0.08, z + dist);
+  return { pos, target, fov: BASE_FOV };
+}
+
 export class World {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
@@ -69,6 +84,12 @@ export class World {
   private controls: OrbitControls;
   private baseDist = 1;
   private lightMix = loadLightMix();
+  private focus = false;
+  private roomFog = new THREE.Fog('#1b1612', 6, 12);
+  private roomBackground = new THREE.Color('#16242f');
+  private focusBackground = new THREE.Color('#04070c');
+  /** Soft fill so the tank is not dull once the room lights are gone. */
+  private focusFill = new THREE.HemisphereLight('#dfe9ff', '#1a2230', 0.9);
 
   constructor(private container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -81,9 +102,11 @@ export class World {
     container.appendChild(this.renderer.domElement);
     this.renderer.domElement.setAttribute('aria-hidden', 'true');
 
-    this.scene.background = new THREE.Color('#16242f');
-    this.scene.fog = new THREE.Fog('#1b1612', 6, 12);
+    this.scene.background = this.roomBackground;
+    this.scene.fog = this.roomFog;
     this.scene.add(this.room.group);
+    this.focusFill.intensity = 0;
+    this.scene.add(this.focusFill);
 
     // Orbit around the tank: front and both sides (azimuth ±90°), no panning.
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -139,13 +162,24 @@ export class World {
     saveLightMix(this.lightMix);
   }
 
+  /** Viewing mode: hide the room and frame only the tank. */
+  setFocus(on: boolean) {
+    if (this.focus === on) return;
+    this.focus = on;
+    this.room.setFocus(on);
+    this.focusFill.intensity = on ? 0.9 : 0;
+    this.scene.background = on ? this.focusBackground : this.roomBackground;
+    this.scene.fog = on ? null : this.roomFog;
+    this.resetView();
+  }
+
   /** Tween back to the default front framing for the current tier. */
   resetView() {
     if (!this.tier) return;
-    this.goal = framingFor(this.tier, this.camera.aspect);
+    this.goal = (this.focus ? focusFramingFor : framingFor)(this.tier, this.camera.aspect);
     this.baseDist = this.goal.pos.distanceTo(this.goal.target);
     this.controls.minDistance = this.baseDist * 0.45;
-    this.controls.maxDistance = this.baseDist * 1.1;
+    this.controls.maxDistance = this.baseDist * (this.focus ? 1.6 : 1.1);
   }
 
   /** Start loading GLB fish; swap them in for placeholders as they arrive. */
@@ -217,14 +251,14 @@ export class World {
     } else {
       // Side views must stay inside the room: the further away, the less we can swing.
       const d = this.camera.position.distanceTo(this.controls.target);
-      const maxAz = Math.asin(Math.min(1, (ROOM.halfWidth - 0.15) / d));
+      const maxAz = this.focus ? Math.PI / 2 : Math.asin(Math.min(1, (ROOM.halfWidth - 0.15) / d));
       this.controls.minAzimuthAngle = -maxAz;
       this.controls.maxAzimuthAngle = maxAz;
       this.controls.update(dt);
       this.lookAt.copy(this.controls.target);
-      this.keepInsideRoom();
+      if (!this.focus) this.keepInsideRoom();
     }
-    if (this.tank) {
+    if (this.tank && !this.focus) {
       const base = this.tank.group.position;
       const h = this.tank.size.y;
       this.room.fadeOccluders(this.camera.position, [

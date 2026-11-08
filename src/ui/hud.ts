@@ -11,6 +11,8 @@ export const ICONS = {
   water: svg('<path d="M3 15c2 0 2-1.5 4.5-1.5S10 15 12 15s2-1.5 4.5-1.5S19 15 21 15"/><path d="M3 19c2 0 2-1.5 4.5-1.5S10 19 12 19s2-1.5 4.5-1.5S19 19 21 19"/><path d="M12 3v8m-3-3 3 3 3-3"/>'),
   decor: svg('<path d="M12 21V11"/><path d="M12 11c0-4 3-7 7-7 0 4-3 7-7 7z"/><path d="M12 14c0-3-2.5-5.5-6-5.5 0 3 2.5 5.5 6 5.5z"/><path d="M7 21h10"/>'),
   book: svg('<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/><path d="M9 7h6"/>'),
+  eye: svg('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
+  close: svg('<path d="M6 6l12 12M18 6 6 18"/>'),
   lock: `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`,
 };
 
@@ -22,6 +24,7 @@ export interface HudHandlers {
   onDecor(): void;
   onCollection(): void;
   onSettings(): void;
+  onView(on: boolean): void;
 }
 
 const fmt = new Intl.NumberFormat('vi-VN');
@@ -51,6 +54,7 @@ export class Hud {
         <div class="wallet">
           <div class="pill panel" aria-label="Xu">${ICONS.coin}<span data-ref="coins">0</span></div>
           <div class="pill panel" aria-label="Ngọc">${ICONS.gem}<span data-ref="gems">0</span></div>
+          <button class="icon-btn panel" data-act="view" aria-label="Chế độ ngắm bể" title="Chế độ ngắm bể">${ICONS.eye}</button>
           <button class="icon-btn panel" data-act="settings" aria-label="Cài đặt">${ICONS.gear}</button>
         </div>
       </header>
@@ -73,6 +77,7 @@ export class Hud {
         <div class="tiers-label"><strong>Kích thước bể</strong><span data-ref="next"></span></div>
         <div class="tier-list" data-ref="tiers"></div>
       </nav>
+      <button class="view-exit panel" data-act="unview">${ICONS.close}Thoát chế độ ngắm</button>
       <div class="toast panel" data-ref="toast" role="status" aria-live="polite"></div>
     `;
     root.appendChild(this.el);
@@ -94,6 +99,8 @@ export class Hud {
         case 'collection': return this.h.onCollection();
         case 'settings': return this.h.onSettings();
         case 'back': return this.h.onBack();
+        case 'view': return this.h.onView(true);
+        case 'unview': return this.h.onView(false);
       }
     });
   }
