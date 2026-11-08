@@ -240,6 +240,13 @@
       "#3ff0ff",
       "#ffa04a",
       "#c9ff4a"
+    ],
+    "rock_models": [
+      "/models/rocks/rock_boulder_01.0d2f2f9ed3.glb",
+      "/models/rocks/rock_moon_rock_04.df93454e4f.glb",
+      "/models/rocks/rock_moon_rock_06.dbf3eaf906.glb",
+      "/models/rocks/rock_namaqualand_boulder_04.48a8890ea9.glb",
+      "/models/rocks/rock_rock_09.3c73619748.glb"
     ]
   }
 }

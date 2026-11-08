@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import type { Species, TankTier } from '../game/types';
 import { Fish, fishLengthM } from './fish';
-import { cachedFishModel, type Axis } from './models';
+import { cachedFishModel, loadRockModel, type Axis } from './models';
 import gameConfig from '../../config/game.json';
 import type { Look } from './look';
 import { WaterFx, waveAmplitude, waveHeight } from './water';
 
 const CORAL_COLORS = gameConfig.visual.coral_colors;
+const ROCK_MODELS: string[] = gameConfig.visual.rock_models ?? [];
 
 /** Height of the stand top for a tier (metres). Large tanks sit on a lower stand. */
 export function standHeightFor(tier: TankTier) {
@@ -112,8 +113,28 @@ export class Tank {
       m.position.set((rng() - 0.5) * L * 0.75, sandH + r * 0.4, -D * 0.25 + (rng() - 0.5) * D * 0.3);
       m.rotation.set(rng() * 3, rng() * 3, rng() * 3);
       m.castShadow = true;
-      rocks.add(m);
-      rocks.add(this.coralCluster(m.position, r, rng));
+      const coral = this.coralCluster(m.position, r, rng);
+      rocks.add(m, coral);
+      // Swap the procedural placeholder for a real rock model once it has loaded.
+      if (ROCK_MODELS.length) {
+        const url = ROCK_MODELS[Math.floor(rng() * ROCK_MODELS.length)];
+        const size = Math.min(L, D) * (0.3 + rng() * 0.2);
+        const yaw = rng() * Math.PI * 2;
+        const coralSeed = Math.floor(rng() * 1e6);
+        const at = m.position.clone();
+        loadRockModel(url).then((src) => {
+          if (this.disposed) return;
+          const rock = src.clone();
+          rock.scale.setScalar(size);
+          rock.rotation.y = yaw;
+          rock.position.set(at.x, sandH - size * 0.04, at.z);
+          rock.updateMatrixWorld(true);
+          const h = new THREE.Box3().setFromObject(rock).max.y - rock.position.y;
+          const cr = size * 0.32;
+          rocks.remove(m, coral);
+          rocks.add(rock, this.coralCluster(new THREE.Vector3(at.x, sandH + h - cr * 0.85, at.z), cr, mulberry32(coralSeed)));
+        }, () => {});
+      }
     }
 
     // Lid light bar
@@ -291,7 +312,10 @@ export class Tank {
     return d;
   }
 
+  private disposed = false;
+
   dispose() {
+    this.disposed = true;
     for (const f of this.fish) f.dispose();
     for (const d of this.disposables) d.dispose();
     this.waterFx.dispose();

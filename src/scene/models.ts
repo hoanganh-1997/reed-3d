@@ -76,3 +76,24 @@ function normalise(scene: THREE.Object3D, forward: Axis): THREE.Group {
   }
   return out;
 }
+
+/**
+ * Decor rock GLBs (CC0, Poly Haven): longest side 1 unit, origin bottom-centre.
+ * Loaded once and shared; tanks clone the meshes (geometry/material shared).
+ */
+const rockCache = new Map<string, Promise<THREE.Object3D>>();
+export function loadRockModel(url: string): Promise<THREE.Object3D> {
+  let p = rockCache.get(url);
+  if (!p) {
+    p = loader.loadAsync(url).then((gltf) => {
+      gltf.scene.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh) m.castShadow = m.receiveShadow = true;
+      });
+      return gltf.scene;
+    });
+    p.catch((e) => console.warn('rock model failed, keeping placeholder', url, e));
+    rockCache.set(url, p);
+  }
+  return p;
+}
