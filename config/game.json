@@ -161,24 +161,42 @@
     }
   ],
   "visual": {
-    "$comment": "Client-only look settings (not stored in DB). Reef tanks use blue/actinic LEDs; the room stays warm sunset.",
-    "tank_light": "#4a5bff",
-    "tank_glow": "#2f45ff",
-    "lid_light": "#9aa6ff",
-    "water_color": "#050f55",
-    "water_emissive": "#1022c8",
-    "water_emissive_intensity": 0.75,
-    "water_opacity": 0.32,
+    "$comment": "Client-only look settings (not stored in DB). The room stays warm sunset. The tank light mixes a white 'day' look (true fish colours, ~12000K) with a blue actinic 'night' look; light_mix 0 = white, 1 = blue. Players can change it in Settings.",
+    "light_mix_default": 0.35,
+    "tone_mapping": "neutral",
+    "exposure": 1.0,
+    "day": {
+      "tank_light": "#eef4ff",
+      "tank_light_intensity": 6,
+      "tank_glow": "#d6e6ff",
+      "tank_glow_intensity": 1.0,
+      "lid_light": "#f4f8ff",
+      "water_color": "#0d4a7a",
+      "water_emissive": "#0b4f8f",
+      "water_emissive_intensity": 0.18,
+      "water_opacity": 0.12,
+      "fish_glow": 0.08,
+      "model_fish_glow": 0.25
+    },
+    "night": {
+      "tank_light": "#2a6bff",
+      "tank_light_intensity": 6,
+      "tank_glow": "#1f5bff",
+      "tank_glow_intensity": 1.4,
+      "lid_light": "#7aa8ff",
+      "water_color": "#03205e",
+      "water_emissive": "#0a3ad0",
+      "water_emissive_intensity": 0.6,
+      "water_opacity": 0.26,
+      "fish_glow": 0.3,
+      "model_fish_glow": 0.9
+    },
     "coral_colors": [
       "#5cff9a",
       "#ff5fc8",
       "#3ff0ff",
       "#ffa04a",
       "#c9ff4a"
-    ],
-    "fish_glow": 0.32,
-    "tank_glow_intensity": 1.4,
-    "tank_light_intensity": 6,
-    "model_fish_glow": 1.1
+    ]
   }
 }

@@ -3,8 +3,9 @@ import type { Species, TankTier } from '../game/types';
 import { Fish, fishLengthM } from './fish';
 import { cachedFishModel, type Axis } from './models';
 import gameConfig from '../../config/game.json';
+import type { Look } from './look';
 
-const LOOK = gameConfig.visual;
+const CORAL_COLORS = gameConfig.visual.coral_colors;
 
 /** Height of the stand top for a tier (metres). Large tanks sit on a lower stand. */
 export function standHeightFor(tier: TankTier) {
@@ -28,8 +29,15 @@ export class Tank {
   private disposables: { dispose(): void }[] = [];
   readonly light: THREE.PointLight;
   readonly spot: THREE.SpotLight;
+  private waterMat: THREE.MeshPhysicalMaterial;
+  private surfMat: THREE.MeshStandardMaterial;
+  private lidMat: THREE.MeshStandardMaterial;
+  private look: Look;
+  private spotScale: number;
+  private glowScale: number;
 
-  constructor(public tier: TankTier) {
+  constructor(public tier: TankTier, look: Look) {
+    this.look = look;
     const L = tier.length_cm / 100;
     const H = tier.height_cm / 100;
     const D = tier.depth_cm / 100;
@@ -57,22 +65,18 @@ export class Tank {
 
     // Water volume (slightly below rim)
     const waterH = H * 0.93;
-    const waterMat = this.track(new THREE.MeshPhysicalMaterial({
-      color: LOOK.water_color,
-      emissive: LOOK.water_emissive,
-      emissiveIntensity: LOOK.water_emissive_intensity,
+    const waterMat = (this.waterMat = this.track(new THREE.MeshPhysicalMaterial({
       transparent: true,
-      opacity: LOOK.water_opacity,
       roughness: 0.1,
       depthWrite: false,
-    }));
+    })));
     const water = new THREE.Mesh(this.track(new THREE.BoxGeometry(L - 0.002, waterH, D - 0.002)), waterMat);
     water.position.y = waterH / 2;
     water.renderOrder = 2;
 
-    const surfMat = this.track(new THREE.MeshStandardMaterial({
-      color: '#c4ccff', emissive: LOOK.lid_light, emissiveIntensity: 0.3, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide,
-    }));
+    const surfMat = (this.surfMat = this.track(new THREE.MeshStandardMaterial({
+      color: '#d4e2ff', emissiveIntensity: 0.3, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide,
+    })));
     this.surface = new THREE.Mesh(this.track(new THREE.PlaneGeometry(L, D, 24, 12)), surfMat);
     this.surface.rotation.x = -Math.PI / 2;
     this.surface.position.y = waterH;
@@ -106,20 +110,23 @@ export class Tank {
     // Lid light bar
     const lid = new THREE.Mesh(
       this.track(new THREE.BoxGeometry(L * 0.9, 0.012, Math.min(0.08, D * 0.3))),
-      this.track(new THREE.MeshStandardMaterial({ color: LOOK.lid_light, emissive: LOOK.lid_light, emissiveIntensity: 2.4 })),
+      (this.lidMat = this.track(new THREE.MeshStandardMaterial({ emissiveIntensity: 2.4 }))),
     );
     lid.position.y = H + GLASS + 0.008;
 
     // Tank is the brightest light in the room.
-    this.spot = new THREE.SpotLight(LOOK.tank_light, LOOK.tank_light_intensity * Math.max(0.6, L * D * 4), H * 3, Math.PI / 3, 0.6, 1.4);
+    this.spotScale = Math.max(0.6, L * D * 4);
+    this.glowScale = Math.max(1, L * 2);
+    this.spot = new THREE.SpotLight('#ffffff', 1, H * 3, Math.PI / 3, 0.6, 1.4);
     this.spot.position.set(0, H + 0.05, 0);
     this.spot.target.position.set(0, 0, 0);
     this.spot.castShadow = true;
     this.spot.shadow.mapSize.set(512, 512);
-    this.light = new THREE.PointLight(LOOK.tank_glow, LOOK.tank_glow_intensity * Math.max(1, L * 2), Math.max(1.6, L * 2.5), 1.8);
+    this.light = new THREE.PointLight('#ffffff', 1, Math.max(1.6, L * 2.5), 1.8);
     this.light.position.set(0, H * 0.6, D * 0.2);
 
     this.waterGroup.add(water, this.surface, sand, rocks, this.spot, this.spot.target, this.light, lid);
+    this.setLook(look);
     this.group.add(this.waterGroup, glass, edges);
 
     // Ghost: shown when previewing a locked tier
@@ -139,7 +146,7 @@ export class Tank {
     const g = new THREE.Group();
     const n = 2 + Math.floor(rng() * 3);
     for (let i = 0; i < n; i++) {
-      const color = LOOK.coral_colors[Math.floor(rng() * LOOK.coral_colors.length)];
+      const color = CORAL_COLORS[Math.floor(rng() * CORAL_COLORS.length)];
       const mat = this.track(new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.55, roughness: 0.6 }));
       const branching = rng() > 0.5;
       const geo = this.track(branching
@@ -164,6 +171,23 @@ export class Tank {
     });
   }
 
+  /** Apply a blended white/actinic look to lights, water and fish. */
+  setLook(look: Look) {
+    this.look = look;
+    this.spot.color.copy(look.tank_light);
+    this.spot.intensity = look.tank_light_intensity * this.spotScale;
+    this.light.color.copy(look.tank_glow);
+    this.light.intensity = look.tank_glow_intensity * this.glowScale;
+    this.waterMat.color.copy(look.water_color);
+    this.waterMat.emissive.copy(look.water_emissive);
+    this.waterMat.emissiveIntensity = look.water_emissive_intensity;
+    this.waterMat.opacity = look.water_opacity;
+    this.surfMat.emissive.copy(look.lid_light);
+    this.lidMat.color.copy(look.lid_light);
+    this.lidMat.emissive.copy(look.lid_light);
+    for (const f of this.fish) f.setGlow(look);
+  }
+
   setFish(speciesList: Species[]) {
     for (const f of this.fish) {
       this.group.remove(f.group);
@@ -174,6 +198,7 @@ export class Tank {
     for (const s of speciesList) {
       const model = s.model_url ? cachedFishModel(s.model_url, s.model_forward as Axis) : null;
       const f = new Fish(s, fishLengthM(s, minCm), model);
+      f.setGlow(this.look);
       const half = this.halfInner();
       f.pickTarget(half.clone().multiplyScalar(0.6));
       f.group.position.copy(f.target).setY(f.target.y + this.swimCentreY());

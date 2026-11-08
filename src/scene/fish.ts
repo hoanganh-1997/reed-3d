@@ -1,9 +1,6 @@
 import * as THREE from 'three';
 import type { Species } from '../game/types';
-import gameConfig from '../../config/game.json';
-
-/** Slight self-glow so fish colours read under blue actinic light. */
-const FISH_GLOW = gameConfig.visual.fish_glow;
+import type { Look } from './look';
 
 /**
  * Placeholder fish built procedurally until the GLB models exist.
@@ -92,6 +89,9 @@ export class Fish {
   target = new THREE.Vector3();
   private phase = Math.random() * 100;
   private materials: THREE.Material[] = [];
+  /** Materials that self-glow so colours stay readable under blue light. */
+  private glowMats: THREE.MeshStandardMaterial[] = [];
+  private isModel = false;
 
   constructor(public species: Species, lengthM: number, model?: THREE.Object3D | null) {
     this.length = lengthM;
@@ -106,12 +106,13 @@ export class Fish {
     };
 
     if (model) {
+      this.isModel = true;
       this.buildFromModel(model);
       this.group.scale.setScalar(lengthM);
       return;
     }
 
-    const bodyMat = new THREE.MeshStandardMaterial({ color: species.body_color, emissive: species.body_color, emissiveIntensity: FISH_GLOW, roughness: 0.45, metalness: 0.05 });
+    const bodyMat = new THREE.MeshStandardMaterial({ color: species.body_color, emissive: species.body_color, emissiveIntensity: 0, roughness: 0.45, metalness: 0.05 });
     const finMat = new THREE.MeshStandardMaterial({
       color: species.fin_color,
       map: finTexture(),
@@ -123,6 +124,7 @@ export class Fish {
     const accentMat = new THREE.MeshStandardMaterial({ color: species.accent_color, roughness: 0.5 });
     const eyeMat = new THREE.MeshStandardMaterial({ color: '#0b0f14', roughness: 0.2 });
     this.materials = [bodyMat, finMat, accentMat, eyeMat];
+    this.glowMats = [bodyMat];
     for (const m of this.materials) applySwimWave(m, this.uniforms);
 
     // Tang silhouette: tall, laterally compressed oval body.
@@ -177,7 +179,8 @@ export class Fish {
         if (mat.map && 'emissiveMap' in mat) {
           mat.emissive = new THREE.Color('#ffffff');
           mat.emissiveMap = mat.map;
-          mat.emissiveIntensity = gameConfig.visual.model_fish_glow;
+          mat.emissiveIntensity = 0;
+          this.glowMats.push(mat as THREE.MeshStandardMaterial);
         }
         applySwimWave(mat, this.uniforms);
         this.materials.push(mat);
@@ -191,6 +194,11 @@ export class Fish {
   }
 
   private sharedGeometry = false;
+
+  setGlow(look: Look) {
+    const v = this.isModel ? look.model_fish_glow : look.fish_glow;
+    for (const m of this.glowMats) m.emissiveIntensity = v;
+  }
 
   /** Called every frame with tank-local bounds (half extents, metres). */
   update(dt: number, time: number, half: THREE.Vector3, food: THREE.Vector3 | null) {

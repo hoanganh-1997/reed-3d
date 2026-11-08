@@ -103,6 +103,9 @@ button:disabled { cursor: default; opacity: 0.55; }
 .demo-banner { position: absolute; left: 50%; transform: translateX(-50%); top: 84px; padding: 6px 12px; font-size: 12px; color: var(--muted); }
 .settings-menu { position: absolute; right: 16px; top: 72px; width: 260px; padding: 16px; display: flex; flex-direction: column; gap: 10px; background: var(--panel-solid); }
 .settings-menu p { margin: 0; font-size: 13px; color: var(--muted); word-break: break-all; }
+.light-mix { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
+.light-mix input { width: 100%; accent-color: var(--accent); height: 28px; }
+.light-mix-ends { display: flex; justify-content: space-between; font-size: 12px; font-weight: 400; color: var(--muted); }
 
 [hidden] { display: none !important; }
 

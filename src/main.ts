@@ -88,8 +88,15 @@ async function main() {
     settingsEl = document.createElement('div');
     settingsEl.className = 'settings-menu panel';
     settingsEl.innerHTML = `<strong>Cài đặt</strong><p data-email></p>
+      <label class="light-mix">Đèn bể
+        <input type="range" min="0" max="100" step="1" data-light aria-label="Đèn bể: trắng đến xanh" />
+        <span class="light-mix-ends"><span>Trắng (màu thật)</span><span>Xanh actinic</span></span>
+      </label>
       ${backend.mode === 'supabase' ? '<button class="btn" data-signout>Đăng xuất</button>' : ''}`;
     settingsEl.querySelector('[data-email]')!.textContent = session?.email ? `Đăng nhập: ${session.email}` : 'Chế độ demo';
+    const light = settingsEl.querySelector<HTMLInputElement>('[data-light]')!;
+    light.value = String(Math.round(world.lightMixValue * 100));
+    light.addEventListener('input', () => world.setLightMix(+light.value / 100));
     settingsEl.querySelector('[data-signout]')?.addEventListener('click', async () => {
       await backend.signOut();
       location.reload();

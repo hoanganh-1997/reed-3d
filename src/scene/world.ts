@@ -3,6 +3,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { Species, TankTier } from '../game/types';
 import { Room, ROOM } from './room';
 import { Tank, standHeightFor } from './tank';
+import { lookFor, loadLightMix, saveLightMix } from './look';
+import gameConfig from '../../config/game.json';
 import { loadFishModel, type Axis } from './models';
 
 interface Framing {
@@ -66,13 +68,14 @@ export class World {
   private reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   private controls: OrbitControls;
   private baseDist = 1;
+  private lightMix = loadLightMix();
 
   constructor(private container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.95;
+    this.renderer.toneMapping = gameConfig.visual.tone_mapping === 'aces' ? THREE.ACESFilmicToneMapping : THREE.NeutralToneMapping;
+    this.renderer.toneMappingExposure = gameConfig.visual.exposure;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     container.appendChild(this.renderer.domElement);
@@ -111,7 +114,7 @@ export class World {
         this.scene.remove(this.tank.group);
         this.tank.dispose();
       }
-      this.tank = new Tank(tier);
+      this.tank = new Tank(tier, lookFor(this.lightMix));
       this.tank.group.position.set(0, standHeightFor(tier), this.room.standCentreZ(Math.max(0.42, tier.depth_cm / 100 + 0.08)));
       this.scene.add(this.tank.group);
       this.tier = tier;
@@ -123,6 +126,17 @@ export class World {
     this.room.setStand(tier.length_cm / 100, tier.depth_cm / 100, standHeightFor(tier), instant);
     this.resetView();
     if (instant || this.reducedMotion) this.snapCamera();
+  }
+
+  /** Tank light: 0 = white (true colours), 1 = blue actinic. Saved per viewer. */
+  get lightMixValue() {
+    return this.lightMix;
+  }
+
+  setLightMix(mix: number) {
+    this.lightMix = THREE.MathUtils.clamp(mix, 0, 1);
+    this.tank?.setLook(lookFor(this.lightMix));
+    saveLightMix(this.lightMix);
   }
 
   /** Tween back to the default front framing for the current tier. */
