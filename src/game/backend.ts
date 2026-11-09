@@ -143,10 +143,13 @@ class DemoBackend implements Backend {
     const tank = this.state.tanks.find((t) => t.id === this.state.profile.active_tank_id)!;
     const tier = this.data.tiers.find((t) => t.id === tank.tier_id)!;
     const min = this.data.tiers.find((t) => t.id === sp.min_tier)!;
-    const n = this.state.fish.filter((f) => f.tank_id === tank.id).length;
+    const inTank = this.state.fish.filter((f) => f.tank_id === tank.id).map((f) => this.data.species.find((s) => s.id === f.species_id));
+    const n = inTank.filter((s) => s && s.kind !== 'invert').length;
+    const same = this.state.fish.filter((f) => f.tank_id === tank.id && f.species_id === sp.id).length;
     if (this.state.profile.level < sp.unlock_level) return Promise.reject(new GameError('level_too_low', 'level_too_low'));
     if (tier.sort_order < min.sort_order) return Promise.reject(new GameError('tank_too_small', 'tank_too_small'));
-    if (n >= tier.max_fish) return Promise.reject(new GameError('tank_full', 'tank_full'));
+    if (sp.kind !== 'invert' && n >= tier.max_fish) return Promise.reject(new GameError('tank_full', 'tank_full'));
+    if ((sp.kind === 'invert' || sp.max_per_tank != null) && same >= (sp.max_per_tank ?? 0)) return Promise.reject(new GameError('species_limit', 'species_limit'));
     if (this.state.profile.coins < sp.price_coins) return Promise.reject(new GameError('not_enough_coins', 'not_enough_coins'));
     this.state.profile.coins -= sp.price_coins;
     this.state.fish.push({ id: 'demo-fish-' + Date.now(), tank_id: tank.id, species_id: speciesId });

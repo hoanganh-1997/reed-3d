@@ -44,6 +44,8 @@ Camera framing (`framingFor` in `src/scene/world.ts`) and the stand size are der
 
 Fish shop (2026-11-08, proposed to Andy): each species has `display_name`, `unlock_level`, `price_coins`, `min_tier` (smallest tank, based on real adult size). Per-tank limit is `tank_tiers.max_fish`. Decor rocks are 5 CC0 Poly Haven GLBs (`visual.rock_models`).
 
+Invertebrates (2026-11-08, Andy: sold in the shop, not free decor): `species.kind` = `fish` | `invert`, plus optional `max_per_tank`. Inverts (first one: red starfish *Fromia milleporella*, 6 per tank) do not use `max_fish` slots; `buy_fish` enforces `max_per_tank` (`species_limit`). They rest on rock tops or sand (`src/scene/starfish.ts`, placed by raycast in `Tank.placeInverts`). Until a GLB is set in `model_url` they use a procedural star mesh.
+
 Assets (later phases):
 - Fish: GLB, ~500–3,000 tris, 1K textures, fins as flat alpha meshes.
 - Furniture: prefer CC0 (Poly Haven). Every asset gets a row in `ASSETS_CREDITS.md` (link, author, license).
@@ -68,7 +70,7 @@ Assets (later phases):
 | `upgrade_tank(p_tier_id)` | shop purchase: target must be bigger than the current tank, `level >= unlock_level`, `coins >= unlock_cost_coins`; deducts coins and changes the tank's tier in place (fish/meters kept). `unlock_tank`/`select_tank` are no longer executable by players (one-tank model). |
 | `feed_tank(p_tank_id)` | +food; XP/coins only if food was below `feed_reward_below` (anti-spam) |
 | `change_water(p_tank_id)` | cleanliness = 100; XP/coins only if it was below `water_reward_below` |
-| `buy_fish(p_species_id)` | fish shop: `level >= species.unlock_level`, tank at least `species.min_tier`, fewer than `tier.max_fish` fish, `coins >= price_coins`; adds the fish to the player's tank |
+| `buy_fish(p_species_id)` | fish shop: `level >= species.unlock_level`, tank at least `species.min_tier`, fewer than `tier.max_fish` fish (kind `fish` only), fewer than `max_per_tank` of that species when set (always for `invert`), `coins >= price_coins`; adds it to the player's tank |
 
 ## Layout
 

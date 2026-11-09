@@ -5,7 +5,7 @@ import { Room, ROOM } from './room';
 import { Tank, standHeightFor } from './tank';
 import { lookFor, loadLightMix, saveLightMix } from './look';
 import gameConfig from '../../config/game.json';
-import { loadFishModel, type Axis } from './models';
+import { loadFishModel, loadInvertModel, type Axis } from './models';
 
 interface Framing {
   pos: THREE.Vector3;
@@ -186,7 +186,8 @@ export class World {
   preloadFishModels(species: Species[]) {
     for (const s of species) {
       if (!s.model_url) continue;
-      loadFishModel(s.model_url, s.model_forward as Axis).then(() => {
+      const load = s.kind === 'invert' ? loadInvertModel(s.model_url) : loadFishModel(s.model_url, s.model_forward as Axis);
+      load.then(() => {
         if (this.tank && !this.ghost && this.shownFish.some((f) => f.id === s.id)) this.tank.setFish(this.shownFish);
       }, () => {});
     }

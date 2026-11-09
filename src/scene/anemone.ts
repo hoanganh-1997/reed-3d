@@ -54,28 +54,48 @@ export class Anemone {
   constructor(diameter: number, seed = 1) {
     const rng = mulberry32(seed * 7919 + 13);
     const discR = diameter * 0.2;
-    const colR = diameter * 0.16;
-    const colH = diameter * 0.42;
+    const colR = diameter * 0.17;
+    // Real bubble-tips sit low: a short column wedged into rock, hidden under the tentacles.
+    const colH = diameter * 0.12;
     const tentLen = diameter * 0.36;
+    const rockH = diameter * 0.1;
 
-    // Column: flared foot, slightly waisted trunk, flared top.
+    // Anchor rock: a low, lumpy stone the foot grips.
+    const rockGeo = this.track(new THREE.IcosahedronGeometry(diameter * 0.3, 3));
+    const rp = rockGeo.attributes.position as THREE.BufferAttribute;
+    const v = new THREE.Vector3();
+    const k = [rng() * 6, rng() * 6, rng() * 6];
+    for (let i = 0; i < rp.count; i++) {
+      v.fromBufferAttribute(rp, i).normalize();
+      const n = 1 + 0.16 * Math.sin(v.x * 3 + k[0]) * Math.cos(v.z * 4 + k[1]) + 0.08 * Math.sin(v.y * 6 + k[2]);
+      v.multiplyScalar(diameter * 0.3 * n);
+      v.y = Math.max(v.y, 0) * (rockH / (diameter * 0.3)) * 1.6 - diameter * 0.01;
+      rp.setXYZ(i, v.x, v.y, v.z);
+    }
+    rockGeo.computeVertexNormals();
+    const rock = new THREE.Mesh(rockGeo, this.track(new THREE.MeshStandardMaterial({ color: '#8d8378', roughness: 0.95 })));
+    rock.castShadow = true;
+    rock.receiveShadow = true;
+
+    // Column: flared foot gripping the rock, short trunk, flared top.
     const colPts = [
       new THREE.Vector2(0, 0),
-      new THREE.Vector2(colR * 1.25, 0),
-      new THREE.Vector2(colR * 1.12, colH * 0.06),
-      new THREE.Vector2(colR * 0.98, colH * 0.3),
-      new THREE.Vector2(colR * 0.95, colH * 0.6),
-      new THREE.Vector2(colR * 1.05, colH * 0.88),
+      new THREE.Vector2(colR * 1.3, 0),
+      new THREE.Vector2(colR * 1.1, colH * 0.2),
+      new THREE.Vector2(colR * 1.0, colH * 0.55),
+      new THREE.Vector2(colR * 1.1, colH * 0.85),
       new THREE.Vector2(discR * 1.02, colH),
       new THREE.Vector2(0, colH),
     ];
     const colGeo = this.track(new THREE.LatheGeometry(colPts, 32));
-    paintByHeight(colGeo, (y) => mix(COLORS.column, COLORS.columnTop, y / colH));
+    colGeo.translate(0, rockH * 0.7, 0);
+    paintByHeight(colGeo, (y) => mix(COLORS.column, COLORS.columnTop, (y - rockH * 0.7) / colH));
     addFolds(colGeo, colR * 0.035, 9);
     const colMat = this.track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 }));
     const column = new THREE.Mesh(colGeo, colMat);
     column.castShadow = true;
     column.receiveShadow = true;
+    const topY = rockH * 0.7 + colH;
 
     // Oral disc: shallow dome with a dark mouth in the middle.
     const discGeo = this.track(new THREE.CircleGeometry(discR, 40, 0, Math.PI * 2));
@@ -84,7 +104,7 @@ export class Anemone {
     for (let i = 0; i < dp.count; i++) {
       const r = Math.hypot(dp.getX(i), dp.getZ(i)) / discR;
       // Raised rim, sunken mouth.
-      dp.setY(i, colH + diameter * 0.02 * (Math.sin(r * Math.PI) * 0.6 - (r < 0.12 ? 0.5 : 0)));
+      dp.setY(i, topY + diameter * 0.02 * (Math.sin(r * Math.PI) * 0.6 - (r < 0.12 ? 0.5 : 0)));
     }
     discGeo.computeVertexNormals();
     paintByRadius(discGeo, (r) => (r < 0.1 * discR ? COLORS.mouth : mix(COLORS.disc, COLORS.stalk, r / discR)));
@@ -127,14 +147,14 @@ transformed.y -= bend * bend * 0.6;`);
       const r = Math.sqrt(f) * discR * 0.92;
       const a = i * golden + rng() * 0.2;
       // Inner tentacles stand up, outer ones splay out and droop over the column.
-      const tilt = THREE.MathUtils.lerp(0.15, 1.75, Math.pow(f, 0.8)) + (rng() - 0.5) * 0.25;
+      const tilt = THREE.MathUtils.lerp(0.15, 1.95, Math.pow(f, 0.8)) + (rng() - 0.5) * 0.25;
       e.set(0, -a, 0, 'YXZ');
       q.setFromEuler(e);
       const out = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, -1), tilt);
       q.multiply(out);
       const len = tentLen * (0.85 + rng() * 0.3) * THREE.MathUtils.lerp(0.8, 1, f);
       const thick = len * (1.2 + rng() * 0.2);
-      const pos = new THREE.Vector3(Math.cos(a) * r, colH + diameter * 0.01, Math.sin(a) * r);
+      const pos = new THREE.Vector3(Math.cos(a) * r, topY + diameter * 0.01, Math.sin(a) * r);
       m.compose(pos, q, new THREE.Vector3(thick, len, thick));
       tentacles.setMatrixAt(i, m);
       // Neighbouring tentacles move almost together, like a real current.
@@ -147,7 +167,7 @@ transformed.y -= bend * bend * 0.6;`);
     // Sway moves tips outside the static bounds; skip culling (it is always in the tank view).
     tentacles.frustumCulled = false;
 
-    this.group.add(column, disc, tentacles);
+    this.group.add(rock, column, disc, tentacles);
     this.uniforms.uSway.value = 0.16;
   }
 

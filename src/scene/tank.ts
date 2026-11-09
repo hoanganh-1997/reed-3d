@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import type { Species, TankTier } from '../game/types';
 import { Fish, fishLengthM } from './fish';
-import { cachedFishModel, loadRockModel, type Axis } from './models';
+import { cachedFishModel, cachedInvertModel, loadRockModel, type Axis } from './models';
+import { Starfish, starfishDiameterM } from './starfish';
 import gameConfig from '../../config/game.json';
 import type { Look } from './look';
 import { WaterFx, waveAmplitude, waveHeight } from './water';
@@ -24,6 +25,10 @@ export class Tank {
   readonly group = new THREE.Group();
   readonly size: THREE.Vector3; // inner size in metres (x=length, y=height, z=depth)
   readonly fish: Fish[] = [];
+  readonly inverts: Starfish[] = [];
+  private invertGroup = new THREE.Group();
+  private rocks = new THREE.Group();
+  private sand!: THREE.Mesh;
   private waterGroup = new THREE.Group();
   private ghostGroup = new THREE.Group();
   private surface: THREE.Mesh;
@@ -101,9 +106,10 @@ export class Tank {
     );
     sand.position.y = sandH / 2;
     sand.receiveShadow = true;
+    this.sand = sand;
 
     const rockMat = this.track(new THREE.MeshStandardMaterial({ color: '#8a7a78', roughness: 0.95 }));
-    const rocks = new THREE.Group();
+    const rocks = this.rocks;
     const rng = mulberry32(tier.sort_order * 977);
     const rockCount = tier.length_cm > 100 ? 7 : 3;
     for (let i = 0; i < rockCount; i++) {
@@ -129,6 +135,7 @@ export class Tank {
           rock.position.set(at.x, sandH - size * 0.04, at.z);
           rocks.remove(m);
           rocks.add(rock);
+          this.placeInverts();
         }, () => {});
       }
     }
@@ -160,7 +167,7 @@ export class Tank {
     this.anemone.group.rotation.y = rng() * Math.PI * 2;
 
     this.waterFx = new WaterFx(L, D, sandH, waterH);
-    this.waterGroup.add(water, this.surface, sand, rocks, this.anemone.group, this.waterFx.group, this.spot, this.spot.target, this.light, lid);
+    this.waterGroup.add(water, this.surface, sand, rocks, this.anemone.group, this.waterFx.group, this.invertGroup, this.spot, this.spot.target, this.light, lid);
     this.setLook(look);
     this.group.add(this.waterGroup, glass, edges);
 
@@ -204,13 +211,15 @@ export class Tank {
     this.waterFx.setLook(look);
   }
 
-  setFish(speciesList: Species[]) {
+  setFish(all: Species[]) {
     for (const f of this.fish) {
       this.group.remove(f.group);
       f.dispose();
     }
     this.fish.length = 0;
     const minCm = Math.min(this.tier.length_cm, this.tier.depth_cm, this.tier.height_cm);
+    this.setInverts(all.filter((s) => s.kind === 'invert'), minCm);
+    const speciesList = all.filter((s) => s.kind !== 'invert');
     for (const s of speciesList) {
       const model = s.model_url ? cachedFishModel(s.model_url, s.model_forward as Axis) : null;
       const f = new Fish(s, fishLengthM(s, minCm), model);
@@ -221,6 +230,73 @@ export class Tank {
       f.pickTarget(half.clone().multiplyScalar(0.6));
       this.fish.push(f);
       this.group.add(f.group);
+    }
+  }
+
+  private setInverts(list: Species[], minCm: number) {
+    for (const s of this.inverts) {
+      this.invertGroup.remove(s.group);
+      s.dispose();
+    }
+    this.inverts.length = 0;
+    const seen = new Map<string, number>();
+    for (const sp of list) {
+      const n = seen.get(sp.id) ?? 0;
+      seen.set(sp.id, n + 1);
+      const model = sp.model_url ? cachedInvertModel(sp.model_url) : null;
+      const star = new Starfish(sp, starfishDiameterM(sp, minCm), model, hashSeed(sp.id) + n * 7919);
+      star.group.userData.slot = this.inverts.length;
+      this.inverts.push(star);
+      this.invertGroup.add(star.group);
+    }
+    this.placeInverts();
+  }
+
+  /**
+   * Rest each invertebrate on a rock top or on the sand. Spots are seeded by the
+   * tier and slot so they stay put between visits; re-run when rock models load.
+   */
+  private placeInverts() {
+    if (!this.inverts.length) return;
+    this.group.updateMatrixWorld(true);
+    const ray = new THREE.Raycaster();
+    const down = new THREE.Vector3(0, -1, 0);
+    const targets = [this.rocks, this.sand];
+    // Sorted so spots don't depend on which rock model finished loading first.
+    const boxes = this.rocks.children.map((r) => new THREE.Box3().setFromObject(r)).sort((a, b) => a.min.x - b.min.x || a.min.z - b.min.z);
+    const L = this.size.x;
+    const D = this.size.z;
+    const taken: THREE.Vector3[] = [];
+    for (const star of this.inverts) {
+      const rng = mulberry32(this.tier.sort_order * 131 + star.group.userData.slot * 7907 + 17);
+      let placed = false;
+      for (let attempt = 0; attempt < 24 && !placed; attempt++) {
+        // Two out of three on a rock (if any), the rest on the sand toward the front.
+        const onRock = boxes.length > 0 && (star.group.userData.slot % 3 !== 2 || attempt > 12);
+        const p = new THREE.Vector3();
+        if (onRock) {
+          const b = boxes[Math.floor(rng() * boxes.length)];
+          const c = b.getCenter(new THREE.Vector3());
+          const s = b.getSize(new THREE.Vector3());
+          p.set(c.x + (rng() - 0.5) * s.x * 0.6, 0, c.z + (rng() - 0.5) * s.z * 0.6);
+          this.group.worldToLocal(p.setY(c.y));
+        } else {
+          p.set((rng() - 0.5) * L * 0.8, 0, (rng() * 0.6 - 0.1) * D * 0.8);
+        }
+        const from = this.group.localToWorld(new THREE.Vector3(p.x, this.size.y, p.z));
+        ray.set(from, down);
+        const hit = ray.intersectObjects(targets, true)[0];
+        if (!hit || !hit.face) continue;
+        const normal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+        if (normal.y < 0.55) continue; // too steep to rest on
+        const local = this.group.worldToLocal(hit.point.clone());
+        if (Math.abs(local.x) > L / 2 - star.diameter / 2 || Math.abs(local.z) > D / 2 - star.diameter / 2) continue;
+        if (taken.some((t) => t.distanceTo(local) < star.diameter * 1.1)) continue;
+        taken.push(local);
+        star.placeOn(local, normal);
+        placed = true;
+      }
+      star.group.visible = placed;
     }
   }
 
@@ -299,11 +375,18 @@ export class Tank {
   dispose() {
     this.disposed = true;
     for (const f of this.fish) f.dispose();
+    for (const s of this.inverts) s.dispose();
     for (const d of this.disposables) d.dispose();
     this.waterFx.dispose();
     this.anemone.dispose();
     this.spot.shadow.map?.dispose();
   }
+}
+
+function hashSeed(s: string) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
 }
 
 function mulberry32(a: number) {
