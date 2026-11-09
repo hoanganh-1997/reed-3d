@@ -343,7 +343,33 @@ export class Room {
     this.group.add(shelf);
   }
 
+  /**
+   * Seat by the window. A CC0 Poly Haven leather Chesterfield sofa
+   * (`visual.room_sofa_model`) replaces the procedural armchair once loaded.
+   */
   private buildChair() {
+    const seat = new THREE.Group();
+    const placeholder = this.buildPlaceholderChair();
+    seat.add(placeholder);
+    seat.position.set(-2.1, 0, -0.8);
+    seat.rotation.y = 0.65;
+    this.group.add(seat);
+    this.occluders.push(seat);
+    const visual = gameConfig.visual as { room_sofa_model?: string; room_sofa_height?: number; room_sofa_pos?: number[]; room_sofa_yaw?: number };
+    if (!visual.room_sofa_model) return;
+    loadRoomModel(visual.room_sofa_model, visual.room_sofa_height ?? 0.78)
+      .then((model) => {
+        seat.remove(placeholder);
+        const [x, z] = visual.room_sofa_pos ?? [-2.4, -1.1];
+        seat.position.set(x, 0, z);
+        seat.rotation.y = visual.room_sofa_yaw ?? 0.55;
+        seat.add(model);
+        this.fade.delete(seat);
+      })
+      .catch(() => {});
+  }
+
+  private buildPlaceholderChair() {
     const chair = new THREE.Group();
     const fabric = new THREE.MeshStandardMaterial({ color: '#a36a4e', roughness: 0.95 });
     const dark = new THREE.MeshStandardMaterial({ color: '#3b2a1e', roughness: 0.6 });
@@ -369,10 +395,7 @@ export class Room {
     pillow.rotation.set(-0.3, 0, 0.1);
     chair.add(pillow);
     chair.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = o.receiveShadow = true; });
-    chair.position.set(-2.1, 0, -0.8);
-    chair.rotation.y = 0.65;
-    this.group.add(chair);
-    this.occluders.push(chair);
+    return chair;
   }
 
   /**

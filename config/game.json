@@ -307,6 +307,10 @@
       "/models/rocks/rock_rock_09.3c73619748.glb"
     ],
     "room_plant_model": "/models/room/potted_plant_01.5780540756.glb",
-    "room_plant_height": 1.6
+    "room_plant_height": 1.6,
+    "room_sofa_model": "/models/room/sofa_03.84d3e5623e.glb",
+    "room_sofa_height": 0.85,
+    "room_sofa_pos": [-2.4, -1.1],
+    "room_sofa_yaw": 0.55
   }
 }
