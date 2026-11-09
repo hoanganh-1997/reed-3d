@@ -88,6 +88,10 @@ export class Fish {
   readonly length: number;
   velocity = new THREE.Vector3();
   target = new THREE.Vector3();
+  /** Body capsule used for fish-to-fish spacing (metres, see avoid.ts). */
+  radius = 0;
+  /** Half length of the capsule's core segment along the heading (metres). */
+  halfSpan = 0;
   private wavePhase = Math.random() * 100;
   private materials: THREE.Material[] = [];
   /** Materials that self-glow so colours stay readable under blue light. */
@@ -109,6 +113,7 @@ export class Fish {
     if (model) {
       this.isModel = true;
       this.buildFromModel(model);
+      this.fitCapsule();
       this.group.scale.setScalar(lengthM);
       return;
     }
@@ -166,7 +171,29 @@ export class Fish {
     const accent = new THREE.Mesh(accentGeo, accentMat);
 
     this.group.add(bodyMesh, snoutMesh, ...finMeshes, pecL, pecR, eyeL, eyeR, accent);
+    this.fitCapsule();
     this.group.scale.setScalar(lengthM);
+  }
+
+  /**
+   * Fit the spacing capsule to the unit-length body (before scaling). Radius
+   * covers the body height (thin fin tips may graze) and the swim-wave sway.
+   */
+  private fitCapsule() {
+    const box = new THREE.Box3().setFromObject(this.group);
+    const size = box.getSize(new THREE.Vector3());
+    const r = THREE.MathUtils.clamp(Math.max(size.y * 0.42, size.z * 0.5 + 0.06), 0.18, 0.42);
+    this.radius = r * this.length;
+    this.halfSpan = Math.max(0, size.x / 2 - r) * this.length;
+  }
+
+  /** Keep the fish inside the swim volume (half extents, metres). */
+  clampInside(half: THREE.Vector3) {
+    const m = this.length * 0.6;
+    const p = this.group.position;
+    p.x = THREE.MathUtils.clamp(p.x, -Math.max(0.01, half.x - m), Math.max(0.01, half.x - m));
+    p.y = THREE.MathUtils.clamp(p.y, -Math.max(0.01, half.y - m), Math.max(0.01, half.y - m));
+    p.z = THREE.MathUtils.clamp(p.z, -Math.max(0.01, half.z - m * 0.7), Math.max(0.01, half.z - m * 0.7));
   }
 
   /** Use a normalised GLB (see models.ts): clone meshes, give each its own swim-wave material. */
@@ -201,8 +228,11 @@ export class Fish {
     for (const m of this.glowMats) m.emissiveIntensity = v;
   }
 
-  /** Called every frame with tank-local bounds (half extents, metres). */
-  update(dt: number, time: number, half: THREE.Vector3, food: THREE.Vector3 | null) {
+  /**
+   * Called every frame with tank-local bounds (half extents, metres) and the
+   * neighbour avoidance push from avoid.ts (unitless, ~1 at body contact).
+   */
+  update(dt: number, time: number, half: THREE.Vector3, food: THREE.Vector3 | null, avoid?: THREE.Vector3) {
     const p = this.group.position;
     const margin = this.length * 0.6;
     const limit = new THREE.Vector3(
@@ -218,13 +248,18 @@ export class Fish {
     const desired = goal.clone().sub(p);
     const dist = desired.length();
     if (dist > 1e-4) desired.multiplyScalar(cruise / dist);
+    if (avoid && avoid.lengthSq() > 1e-8) {
+      // Turn away from neighbours. Mostly sideways/vertical, so fish veer and
+      // pass rather than stopping dead; strength rises sharply near contact.
+      desired.addScaledVector(avoid, this.length * 2.2);
+      // A wander target that sits behind a neighbour would keep them pressing together.
+      if (!food && avoid.length() > 0.35 && goal.clone().sub(p).dot(avoid) < 0) this.pickTarget(limit);
+    }
     const steer = desired.sub(this.velocity).multiplyScalar(Math.min(1, dt * 1.6));
     this.velocity.add(steer);
     this.velocity.y *= 0.96; // fish prefer level swimming
     p.addScaledVector(this.velocity, dt);
-    p.x = THREE.MathUtils.clamp(p.x, -limit.x, limit.x);
-    p.y = THREE.MathUtils.clamp(p.y, -limit.y, limit.y);
-    p.z = THREE.MathUtils.clamp(p.z, -limit.z, limit.z);
+    this.clampInside(half);
 
     const speed = this.velocity.length();
     if (speed > 1e-4) {
@@ -251,7 +286,15 @@ export class Fish {
       THREE.MathUtils.randFloatSpread(2 * limit.y),
       THREE.MathUtils.randFloatSpread(2 * limit.z),
     );
+    // Never aim into a rock: lift the target above the rock top under it.
+    if (this.floorAt) {
+      const floor = this.floorAt(this.target.x, this.target.z, this.radius + this.halfSpan) + this.radius + this.length * 0.35;
+      this.target.y = Math.min(limit.y, Math.max(this.target.y, floor));
+    }
   }
+
+  /** Ground height in the swim frame (rock tops), set by the tank. */
+  floorAt: ((x: number, z: number, r: number) => number) | null = null;
 
   dispose() {
     if (!this.sharedGeometry) {

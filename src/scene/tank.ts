@@ -1,14 +1,18 @@
 import * as THREE from 'three';
 import type { Species, TankTier } from '../game/types';
 import { Fish, fishLengthM } from './fish';
+import { avoidance, resolveOverlaps, resolveRocks, rockAvoidance } from './avoid';
+import { RockField } from './rockfield';
 import { cachedFishModel, cachedInvertModel, loadRockModel, type Axis } from './models';
-import { Starfish, starfishDiameterM } from './starfish';
+import { Starfish, starfishDiameterM, type Seabed } from './starfish';
 import gameConfig from '../../config/game.json';
 import type { Look } from './look';
 import { WaterFx, waveAmplitude, waveHeight } from './water';
 import { Anemone } from './anemone';
 
 const ROCK_MODELS: string[] = gameConfig.visual.rock_models ?? [];
+/** Starfish crawl speed in body diameters per second. */
+const STARFISH_SPEED: number = (gameConfig.visual as { starfish_speed?: number }).starfish_speed ?? 0.12;
 
 /** Height of the stand top for a tier (metres). Large tanks sit on a lower stand. */
 export function standHeightFor(tier: TankTier) {
@@ -26,6 +30,10 @@ export class Tank {
   readonly size: THREE.Vector3; // inner size in metres (x=length, y=height, z=depth)
   readonly fish: Fish[] = [];
   readonly inverts: Starfish[] = [];
+  private avoid: THREE.Vector3[] = [];
+  /** Rock height map for fish; rebuilt lazily whenever the rock layout changes. */
+  private rockField!: RockField;
+  private rockFieldDirty = true;
   private invertGroup = new THREE.Group();
   private rocks = new THREE.Group();
   private sand!: THREE.Mesh;
@@ -43,7 +51,7 @@ export class Tank {
   private look: Look;
   private waterFx: WaterFx;
   private spotScale: number;
-  private glowScale: number;
+  private glowBase = 1;
   private anemone: Anemone;
 
   constructor(public tier: TankTier, look: Look) {
@@ -52,6 +60,14 @@ export class Tank {
     const H = tier.height_cm / 100;
     const D = tier.depth_cm / 100;
     this.size = new THREE.Vector3(L, H, D);
+    this.bed = {
+      ground: (x, z) => this.groundAt(x, z),
+      halfX: L / 2 - 0.001,
+      halfZ: D / 2 - 0.001,
+      floorY: Math.max(0.015, H * 0.08),
+      waterY: H * 0.93,
+    };
+    this.rockField = new RockField(L / 2, D / 2, Math.max(0.006, Math.min(L, D) / 40), this.bed.floorY);
 
     // Glass panes
     const glassMat = this.track(new THREE.MeshPhysicalMaterial({
@@ -135,6 +151,7 @@ export class Tank {
           rock.position.set(at.x, sandH - size * 0.04, at.z);
           rocks.remove(m);
           rocks.add(rock);
+          this.rockFieldDirty = true;
           this.placeInverts();
         }, () => {});
       }
@@ -148,18 +165,22 @@ export class Tank {
     lid.position.y = H + GLASS + 0.008;
 
     // Tank is the brightest light in the room.
-    // Matches the old falloff at mid-depth, but now uniform across the whole tank.
     this.spotScale = 1 / Math.pow(H * 0.6, 1.4);
-    this.glowScale = Math.max(1, L * 2);
-    // Wide, soft-edged cone with no falloff so every corner of the tank is lit evenly.
-    const cover = Math.atan(Math.hypot(L, D) / 2 / (H * 0.95)) * 1.15;
-    this.spot = new THREE.SpotLight('#ffffff', 1, 0, Math.min(Math.PI / 2.2, cover), 0.35, 0);
+    // Wide cone with no distance falloff. The soft penumbra edge is pushed outside the
+    // tank (inner cone already covers every corner), so the centre is not brighter than the sides.
+    const PENUMBRA = 0.1;
+    const cover = Math.atan(Math.hypot(L, D) / 2 / (H * 0.95)) * 1.02;
+    this.spot = new THREE.SpotLight('#ffffff', 1, 0, Math.min(Math.PI / 2.05, cover / (1 - PENUMBRA)), PENUMBRA, 0);
     this.spot.position.set(0, H + 0.05, 0);
     this.spot.target.position.set(0, 0, 0);
     this.spot.castShadow = true;
     this.spot.shadow.mapSize.set(512, 512);
-    this.light = new THREE.PointLight('#ffffff', 1, Math.max(1.6, L * 2.5), 1.8);
-    this.light.position.set(0, H * 0.6, D * 0.2);
+    // Front fill: far in front of the glass and with no distance decay, so it reaches every
+    // fish with the same strength (a close light with falloff made a white hotspot in the middle).
+    // Placed high above the viewer so its glossy reflection does not sit mid-tank.
+    const fillZ = D / 2 + Math.max(0.5, L * 0.8);
+    this.light = new THREE.PointLight('#ffffff', 1, Math.hypot(fillZ + D, H * 2) + 0.3, 0);
+    this.light.position.set(0, H * 2, fillZ);
 
     // Bubble-tip anemone on the sand, front right, clear of the back-row rocks.
     this.anemone = new Anemone(THREE.MathUtils.clamp(Math.min(L, D) * 0.36, 0.1, 0.24), tier.sort_order);
@@ -198,7 +219,8 @@ export class Tank {
     this.spot.color.copy(look.tank_light);
     this.spot.intensity = look.tank_light_intensity * this.spotScale;
     this.light.color.copy(look.tank_glow);
-    this.light.intensity = look.tank_glow_intensity * this.glowScale;
+    this.glowBase = look.tank_glow_intensity;
+    this.light.intensity = this.glowBase;
     this.waterMat.color.copy(look.water_color);
     this.waterMat.emissive.copy(look.water_emissive);
     this.waterMat.emissiveIntensity = look.water_emissive_intensity;
@@ -223,10 +245,19 @@ export class Tank {
     for (const s of speciesList) {
       const model = s.model_url ? cachedFishModel(s.model_url, s.model_forward as Axis) : null;
       const f = new Fish(s, fishLengthM(s, minCm), model);
+      f.floorAt = (x, z, r) => this.rockField.heightNear(x, z, r) - this.swimCentreY();
       f.setGlow(this.look);
       const half = this.halfInner();
-      f.pickTarget(half.clone().multiplyScalar(0.6));
-      f.group.position.copy(f.target).setY(f.target.y + this.swimCentreY());
+      // Spawn away from fish already placed (best of a few random tries).
+      const spot = new THREE.Vector3();
+      let bestGap = -Infinity;
+      for (let k = 0; k < 24; k++) {
+        f.pickTarget(half.clone().multiplyScalar(0.6));
+        const gapNow = Math.min(Infinity, ...this.fish.map((o) => o.group.position.clone().setY(o.group.position.y - this.swimCentreY()).distanceTo(f.target) - o.radius - f.radius - Math.max(o.halfSpan, f.halfSpan)));
+        if (gapNow > bestGap) { bestGap = gapNow; spot.copy(f.target); }
+        if (gapNow > f.length) break;
+      }
+      f.group.position.copy(spot).setY(spot.y + this.swimCentreY());
       f.pickTarget(half.clone().multiplyScalar(0.6));
       this.fish.push(f);
       this.group.add(f.group);
@@ -244,7 +275,7 @@ export class Tank {
       const n = seen.get(sp.id) ?? 0;
       seen.set(sp.id, n + 1);
       const model = sp.model_url ? cachedInvertModel(sp.model_url) : null;
-      const star = new Starfish(sp, starfishDiameterM(sp, minCm), model, hashSeed(sp.id) + n * 7919);
+      const star = new Starfish(sp, starfishDiameterM(sp, minCm), model, hashSeed(sp.id) + n * 7919, STARFISH_SPEED);
       star.group.userData.slot = this.inverts.length;
       this.inverts.push(star);
       this.invertGroup.add(star.group);
@@ -300,6 +331,33 @@ export class Tank {
     }
   }
 
+  private bedRay = new THREE.Raycaster();
+  private bed!: Seabed;
+
+  /** Top of the rock work at (x, z), tank-local; null over bare sand. */
+  private rockTopAt(x: number, z: number) {
+    const from = this.group.localToWorld(new THREE.Vector3(x, this.size.y, z));
+    this.bedRay.set(from, new THREE.Vector3(0, -1, 0));
+    const hit = this.bedRay.intersectObject(this.rocks, true)[0];
+    return hit ? this.group.worldToLocal(hit.point.clone()).y : null;
+  }
+
+  /** Sinking food comes to rest on the sand or on top of a rock. */
+  private pelletFloor(m: THREE.Mesh) {
+    return Math.max(this.size.y * 0.09, this.rockField.heightNear(m.position.x, m.position.z, 0) + this.size.x * 0.008);
+  }
+
+  private groundAt(x: number, z: number) {
+    const from = this.group.localToWorld(new THREE.Vector3(x, this.size.y, z));
+    this.bedRay.set(from, new THREE.Vector3(0, -1, 0));
+    const hit = this.bedRay.intersectObjects([this.rocks, this.sand], true)[0];
+    if (!hit || !hit.face) return null;
+    return {
+      point: this.group.worldToLocal(hit.point.clone()),
+      normal: hit.face.normal.clone().transformDirection(hit.object.matrixWorld),
+    };
+  }
+
   /** Half extents of the swimmable volume, relative to its centre. */
   private halfInner() {
     const sandH = Math.max(0.015, this.size.y * 0.08);
@@ -330,10 +388,22 @@ export class Tank {
     // Pellets sink slowly
     for (const p of this.pellets) {
       p.vy = Math.max(-0.035, p.vy - dt * 0.05);
-      p.mesh.position.y = Math.max(this.size.y * 0.09, p.mesh.position.y + p.vy * dt);
+      p.mesh.position.y = Math.max(this.pelletFloor(p.mesh), p.mesh.position.y + p.vy * dt);
     }
 
-    for (const f of this.fish) {
+    if (this.rockFieldDirty) {
+      this.rockFieldDirty = false;
+      this.group.updateMatrixWorld(true);
+      this.rockField.build((x, z) => this.rockTopAt(x, z));
+      for (const p of this.pellets) p.mesh.position.y = Math.max(p.mesh.position.y, this.pelletFloor(p.mesh));
+    }
+
+    // Fish positions are kept relative to the swim-volume centre while simulating.
+    for (const f of this.fish) f.group.position.y -= cy;
+    while (this.avoid.length < this.fish.length) this.avoid.push(new THREE.Vector3());
+    avoidance(this.fish, this.avoid);
+    rockAvoidance(this.fish, this.rockField, cy, this.avoid);
+    this.fish.forEach((f, i) => {
       let foodLocal: THREE.Vector3 | null = null;
       let nearest: { mesh: THREE.Mesh } | null = null;
       let best = Infinity;
@@ -342,14 +412,24 @@ export class Tank {
         if (d < best) { best = d; nearest = p; }
       }
       if (nearest) foodLocal = nearest.mesh.position.clone().setY(nearest.mesh.position.y - cy);
-      // Fish positions are kept relative to the swim-volume centre.
-      f.group.position.y -= cy;
-      f.update(dt, time, half, foodLocal);
-      if (nearest && foodLocal && f.group.position.distanceTo(foodLocal) < f.length * 0.35) {
+      f.update(dt, time, half, foodLocal, this.avoid[i]);
+      if (nearest && foodLocal && f.group.position.distanceTo(foodLocal) < f.length * 0.35 + f.radius) {
         this.group.remove(nearest.mesh);
         this.pellets = this.pellets.filter((p) => p !== nearest);
       }
-      f.group.position.y += cy;
+    });
+    // Bodies never pass through each other, even when crowding at food.
+    // ...and never through rocks. Lifting a fish off a rock can push it into a
+    // neighbour, so alternate the two constraints; rocks get the last word.
+    for (let k = 0; k < 3; k++) {
+      resolveOverlaps(this.fish, half);
+      resolveRocks(this.fish, this.rockField, cy);
+    }
+    for (const f of this.fish) f.group.position.y += cy;
+
+    if (this.inverts.length) {
+      this.group.updateMatrixWorld();
+      for (const star of this.inverts) star.update(dt, this.bed);
     }
 
     // Surface ripples (plane local y maps to tank -z after the -90° X rotation).
@@ -361,8 +441,7 @@ export class Tank {
     this.surface.geometry.computeVertexNormals();
     this.waterFx.update(time);
     this.anemone.update(time);
-    this.light.intensity = this.light.userData.base ?? (this.light.userData.base = this.light.intensity);
-    this.light.intensity = this.light.userData.base * (0.92 + Math.sin(time * 1.1) * 0.08);
+    this.light.intensity = this.glowBase * (0.92 + Math.sin(time * 1.1) * 0.08);
   }
 
   private track<T extends { dispose(): void }>(d: T): T {
