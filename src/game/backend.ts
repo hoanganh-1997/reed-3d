@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient, type Session } from '@supabase/supabase-js';
-import { bundledStatic, type PlayerState, type StaticData, type TankTier } from './types';
+import { bundledStatic, feedsToGrow, maxFishSize, type PlayerState, type StaticData, type TankTier } from './types';
 
 /**
  * All game mutations go through server RPCs. The client never writes tables.
@@ -106,7 +106,7 @@ class DemoBackend implements Backend {
     this.state = {
       profile: { user_id: 'demo', level, xp: 0, xp_to_next: 100, coins: Number(new URLSearchParams(location.search).get('demoCoins') ?? 100), gems: 5, active_tank_id: tankId },
       tanks: [{ id: tankId, tier_id: data.settings.starter_tier, food: 62, cleanliness: 81, health: 92, last_tick_at: now }],
-      fish: data.species.filter((s) => s.starter).map((s, i) => ({ id: 'demo-fish-' + i, tank_id: tankId, species_id: s.id })),
+      fish: data.species.filter((s) => s.starter).map((s, i) => ({ id: 'demo-fish-' + i, tank_id: tankId, species_id: s.id, size_fingers: 1, growth: 0 })),
       server_time: now,
     };
   }
@@ -152,13 +152,27 @@ class DemoBackend implements Backend {
     if ((sp.kind === 'invert' || sp.max_per_tank != null) && same >= (sp.max_per_tank ?? 0)) return Promise.reject(new GameError('species_limit', 'species_limit'));
     if (this.state.profile.coins < sp.price_coins) return Promise.reject(new GameError('not_enough_coins', 'not_enough_coins'));
     this.state.profile.coins -= sp.price_coins;
-    this.state.fish.push({ id: 'demo-fish-' + Date.now(), tank_id: tank.id, species_id: speciesId });
+    this.state.fish.push({ id: 'demo-fish-' + Date.now(), tank_id: tank.id, species_id: speciesId, size_fingers: 1, growth: 0 });
     return this.snap();
   }
 
   feedTank(tankId: string) {
     const t = this.state.tanks.find((x) => x.id === tankId)!;
-    t.food = Math.min(100, t.food + this.data.settings.feed_amount);
+    const s = this.data.settings;
+    // Demo shortcut: every feed counts as a hungry one so growth can be tried quickly.
+    if (t.health >= (s.growth_min_health ?? 50)) {
+      const tier = this.data.tiers.find((x) => x.id === t.tier_id)!;
+      for (const f of this.state.fish.filter((x) => x.tank_id === tankId)) {
+        const sp = this.data.species.find((x) => x.id === f.species_id);
+        if (!sp || sp.kind === 'invert' || (f.size_fingers ?? 1) >= maxFishSize(sp, tier, s)) continue;
+        f.growth = (f.growth ?? 0) + 1;
+        if (f.growth >= feedsToGrow(f.size_fingers ?? 1, s)) {
+          f.size_fingers = (f.size_fingers ?? 1) + 1;
+          f.growth = 0;
+        }
+      }
+    }
+    t.food = Math.min(100, t.food + s.feed_amount);
     return this.snap();
   }
 

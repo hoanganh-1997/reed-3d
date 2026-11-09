@@ -1,6 +1,6 @@
 import './ui/styles.css';
 import { createBackend, GameError } from './game/backend';
-import { projectTank, type PlayerState, type StaticData, type TankTier } from './game/types';
+import { projectTank, type PlayerState, type Resident, type StaticData, type TankTier } from './game/types';
 import { World } from './scene/world';
 import { Hud } from './ui/hud';
 import { showAuth } from './ui/auth';
@@ -27,7 +27,7 @@ async function main() {
 
   // Show the starter tank behind the sign-in card.
   const starter = data.tiers.find((t) => t.id === data.settings.starter_tier) ?? data.tiers[0];
-  world.show(starter, data.species.filter((s) => s.starter), false, true);
+  world.show(starter, data.species.filter((s) => s.starter).map((s, i) => ({ key: `starter-${i}`, species: s, sizeFingers: null, lengthCm: null })), false, true);
 
   if (backend.mode === 'supabase' && !(await backend.getSession())) {
     await showAuth(app, backend);
@@ -40,11 +40,17 @@ async function main() {
 
   const activeTank = () => state.tanks.find((t) => t.id === state.profile.active_tank_id) ?? state.tanks[0];
   const tierOf = (id: string) => data.tiers.find((t) => t.id === id)!;
-  const fishFor = (tankId: string) =>
-    state.fish
+  const fingerCm = data.settings.finger_cm || 2;
+  const residentsFor = (tankId: string, st: PlayerState = state): Resident[] =>
+    st.fish
       .filter((f) => f.tank_id === tankId)
-      .map((f) => data.species.find((s) => s.id === f.species_id))
-      .filter((s): s is NonNullable<typeof s> => !!s);
+      .flatMap((f) => {
+        const species = data.species.find((s) => s.id === f.species_id);
+        if (!species) return [];
+        const size = species.kind === 'invert' ? null : f.size_fingers ?? null;
+        return [{ key: f.id, species, sizeFingers: size, lengthCm: size == null ? null : size * fingerCm }];
+      });
+  const fishFor = (tankId: string) => residentsFor(tankId).map((r) => r.species);
 
   const hud = new Hud(app, data, {
     onShop: () => hud.openShop(),
@@ -142,7 +148,13 @@ async function main() {
 
   function apply(next: PlayerState) {
     const prevLevel = state.profile.level;
+    const prevSize = new Map(state.fish.filter((f) => f.size_fingers != null).map((f) => [f.id, f.size_fingers!]));
     state = next;
+    const grown = residentsFor(activeTank().id).filter((r) => r.sizeFingers != null && (prevSize.get(r.key) ?? r.sizeFingers) < r.sizeFingers);
+    if (grown.length) {
+      const names = [...new Set(grown.map((r) => r.species.display_name ?? r.species.common_name))].join(', ');
+      setTimeout(() => hud.toast(grown.length === 1 ? `${names} đã lớn lên ${grown[0].sizeFingers} ngón tay!` : `${grown.length} con cá đã lớn thêm 1 ngón (${names})!`), 1400);
+    }
     skewMs = Date.parse(state.server_time) - Date.now();
     refreshScene();
     if (next.profile.level > prevLevel) hud.toast(`Lên cấp ${next.profile.level}!`);
@@ -151,7 +163,7 @@ async function main() {
   function refreshScene() {
     const tank = activeTank();
     if (previewTier) world.show(previewTier, [], true);
-    else world.show(tierOf(tank.tier_id), fishFor(tank.id), false);
+    else world.show(tierOf(tank.tier_id), residentsFor(tank.id), false);
     renderHud();
   }
 
@@ -159,7 +171,7 @@ async function main() {
     const tank = activeTank();
     const shown = previewTier ?? tierOf(tank.tier_id);
     const live = projectTank(tank, data.settings, Date.now(), skewMs);
-    hud.render(state, shown, !!previewTier, live, fishFor(tank.id));
+    hud.render(state, shown, !!previewTier, live, fishFor(tank.id), residentsFor(tank.id));
   }
 
   refreshScene();

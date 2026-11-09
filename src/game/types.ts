@@ -13,6 +13,8 @@ export interface TankTier {
   unlock_cost_coins: number;
   max_fish: number;
   sort_order: number;
+  /** Biggest fish size (fingers) this tank allows. Missing until the fish-size migration is applied. */
+  max_size_fingers?: number;
 }
 
 export interface Species {
@@ -68,6 +70,29 @@ export interface TankFish {
   id: string;
   tank_id: string;
   species_id: string;
+  /** Size in fingers (settings.finger_cm each). Missing on a server without the fish-size migration. */
+  size_fingers?: number;
+  /** Rewarded feedings since the last growth step. */
+  growth?: number;
+}
+
+/** One animal shown in the tank: species plus its display size (null = legacy size from the tank). */
+export interface Resident {
+  key: string;
+  species: Species;
+  sizeFingers: number | null;
+  lengthCm: number | null;
+}
+
+/** Biggest size (fingers) a species reaches in a tier. Mirrors private.max_fish_size. */
+export function maxFishSize(sp: Species, tier: TankTier, s: GameSettings) {
+  const finger = s.finger_cm || 2;
+  return Math.max(1, Math.min(tier.max_size_fingers ?? 1, Math.floor(sp.adult_length_cm / finger)));
+}
+
+/** Rewarded feedings to grow from `size` to `size + 1`. Mirrors private.feeds_to_grow. */
+export function feedsToGrow(size: number, s: GameSettings) {
+  return Math.max(1, (s.growth_feeds_base ?? 3) + (s.growth_feeds_step ?? 2) * (size - 1));
 }
 
 export interface PlayerState {

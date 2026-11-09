@@ -85,7 +85,9 @@ function shapeGeometry(points: [number, number][]) {
 export class Fish {
   readonly group = new THREE.Group();
   readonly uniforms: SwimUniforms;
-  readonly length: number;
+  /** Body length in metres; eases towards `targetLength` when the fish grows. */
+  length: number;
+  private targetLength: number;
   velocity = new THREE.Vector3();
   target = new THREE.Vector3();
   /** Body capsule used for fish-to-fish spacing (metres, see avoid.ts). */
@@ -100,6 +102,7 @@ export class Fish {
 
   constructor(public species: Species, lengthM: number, model?: THREE.Object3D | null) {
     this.length = lengthM;
+    this.targetLength = lengthM;
     const L = 1; // build at unit length, scale the group
     this.uniforms = {
       uTime: { value: 0 },
@@ -187,6 +190,22 @@ export class Fish {
     this.halfSpan = Math.max(0, size.x / 2 - r) * this.length;
   }
 
+  /** Grow (or shrink) smoothly to a new body length in metres. */
+  setLength(lengthM: number) {
+    this.targetLength = lengthM;
+  }
+
+  private easeLength(dt: number) {
+    if (this.length === this.targetLength) return;
+    let next = this.length + (this.targetLength - this.length) * (1 - Math.exp(-dt * 1.5));
+    if (Math.abs(next - this.targetLength) < 1e-4) next = this.targetLength;
+    const k = next / this.length;
+    this.radius *= k;
+    this.halfSpan *= k;
+    this.length = next;
+    this.group.scale.setScalar(next);
+  }
+
   /** Keep the fish inside the swim volume (half extents, metres). */
   clampInside(half: THREE.Vector3) {
     const m = this.length * 0.6;
@@ -233,6 +252,7 @@ export class Fish {
    * neighbour avoidance push from avoid.ts (unitless, ~1 at body contact).
    */
   update(dt: number, time: number, half: THREE.Vector3, food: THREE.Vector3 | null, avoid?: THREE.Vector3) {
+    this.easeLength(dt);
     const p = this.group.position;
     const margin = this.length * 0.6;
     const limit = new THREE.Vector3(
@@ -310,7 +330,10 @@ export class Fish {
   }
 }
 
-/** Display length: real adult size, clamped so it fits the tank. */
-export function fishLengthM(species: Species, tankMinCm: number) {
-  return Math.min(species.adult_length_cm, tankMinCm * 0.36) / 100;
+/**
+ * Display length: the fish's own size (fingers × finger_cm) when known, else the real adult
+ * size; always clamped so it fits the tank.
+ */
+export function fishLengthM(species: Species, tankMinCm: number, lengthCm: number | null = null) {
+  return Math.min(lengthCm ?? species.adult_length_cm, species.adult_length_cm, tankMinCm * 0.36) / 100;
 }
