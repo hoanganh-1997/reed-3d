@@ -50,7 +50,7 @@ export class Tank {
   private look: Look;
   private waterFx: WaterFx;
   private spotScale: number;
-  private glowScale: number;
+  private glowBase = 1;
 
   constructor(public tier: TankTier, look: Look) {
     this.look = look;
@@ -163,18 +163,22 @@ export class Tank {
     lid.position.y = H + GLASS + 0.008;
 
     // Tank is the brightest light in the room.
-    // Matches the old falloff at mid-depth, but now uniform across the whole tank.
     this.spotScale = 1 / Math.pow(H * 0.6, 1.4);
-    this.glowScale = Math.max(1, L * 2);
-    // Wide, soft-edged cone with no falloff so every corner of the tank is lit evenly.
-    const cover = Math.atan(Math.hypot(L, D) / 2 / (H * 0.95)) * 1.15;
-    this.spot = new THREE.SpotLight('#ffffff', 1, 0, Math.min(Math.PI / 2.2, cover), 0.35, 0);
+    // Wide cone with no distance falloff. The soft penumbra edge is pushed outside the
+    // tank (inner cone already covers every corner), so the centre is not brighter than the sides.
+    const PENUMBRA = 0.1;
+    const cover = Math.atan(Math.hypot(L, D) / 2 / (H * 0.95)) * 1.02;
+    this.spot = new THREE.SpotLight('#ffffff', 1, 0, Math.min(Math.PI / 2.05, cover / (1 - PENUMBRA)), PENUMBRA, 0);
     this.spot.position.set(0, H + 0.05, 0);
     this.spot.target.position.set(0, 0, 0);
     this.spot.castShadow = true;
     this.spot.shadow.mapSize.set(512, 512);
-    this.light = new THREE.PointLight('#ffffff', 1, Math.max(1.6, L * 2.5), 1.8);
-    this.light.position.set(0, H * 0.6, D * 0.2);
+    // Front fill: far in front of the glass and with no distance decay, so it reaches every
+    // fish with the same strength (a close light with falloff made a white hotspot in the middle).
+    // Placed high above the viewer so its glossy reflection does not sit mid-tank.
+    const fillZ = D / 2 + Math.max(0.5, L * 0.8);
+    this.light = new THREE.PointLight('#ffffff', 1, Math.hypot(fillZ + D, H * 2) + 0.3, 0);
+    this.light.position.set(0, H * 2, fillZ);
 
     this.waterFx = new WaterFx(L, D, sandH, waterH);
     this.waterGroup.add(water, this.surface, sand, rocks, this.waterFx.group, this.invertGroup, this.spot, this.spot.target, this.light, lid);
@@ -208,7 +212,8 @@ export class Tank {
     this.spot.color.copy(look.tank_light);
     this.spot.intensity = look.tank_light_intensity * this.spotScale;
     this.light.color.copy(look.tank_glow);
-    this.light.intensity = look.tank_glow_intensity * this.glowScale;
+    this.glowBase = look.tank_glow_intensity;
+    this.light.intensity = this.glowBase;
     this.waterMat.color.copy(look.water_color);
     this.waterMat.emissive.copy(look.water_emissive);
     this.waterMat.emissiveIntensity = look.water_emissive_intensity;
@@ -427,8 +432,7 @@ export class Tank {
     pos.needsUpdate = true;
     this.surface.geometry.computeVertexNormals();
     this.waterFx.update(time);
-    this.light.intensity = this.light.userData.base ?? (this.light.userData.base = this.light.intensity);
-    this.light.intensity = this.light.userData.base * (0.92 + Math.sin(time * 1.1) * 0.08);
+    this.light.intensity = this.glowBase * (0.92 + Math.sin(time * 1.1) * 0.08);
   }
 
   private track<T extends { dispose(): void }>(d: T): T {
