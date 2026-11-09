@@ -43,7 +43,7 @@ After editing, run `npm run gen:static` → it writes a **new timestamped migrat
 
 Camera framing (`framingFor` in `src/scene/world.ts`) and the stand size are derived from tier dimensions, so new tiers (e.g. 90/120 cm long tanks) need only a config row.
 
-Fish shop (2026-11-08, proposed to Andy): each species has `display_name`, `unlock_level`, `price_coins`, `min_tier` (smallest tank, based on real adult size). Per-tank limit is `tank_tiers.max_fish`. Decor rocks are 5 CC0 Poly Haven GLBs (`visual.rock_models`).
+Fish shop (2026-11-08, proposed to Andy): each species has `display_name`, `unlock_level`, `price_coins`, `min_tier` (smallest tank, based on real adult size). Per-tank limit is `tank_tiers.max_fish`. Decor rocks are 5 CC0 Poly Haven GLBs (`visual.rock_models`). The big room floor plant is the CC0 Poly Haven `potted_plant_01` (2026-11-09, Andy wanted a more natural plant): `visual.room_plant_model` + `room_plant_height` (m); the procedural plant in `room.ts` is only the fallback while it loads.
 
 Invertebrates (2026-11-08, Andy: sold in the shop, not free decor): `species.kind` = `fish` | `invert`, plus optional `max_per_tank`. Inverts (first one: red starfish *Fromia milleporella*, 6 per tank) do not use `max_fish` slots; `buy_fish` enforces `max_per_tank` (`species_limit`). They start on rock tops or sand (`Tank.placeInverts`), then crawl slowly (2026-11-09, Andy) over sand and rock tops, now and then climb one of the four glass panes, rest there and come back down (`src/scene/starfish.ts`, speed `visual.starfish_speed` in diameters/s; client-only display, not saved). Until a GLB is set in `model_url` they use a procedural star mesh.
 

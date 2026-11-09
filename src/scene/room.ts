@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import gameConfig from '../../config/game.json';
+import { loadRoomModel } from './models';
 
 /**
  * Placeholder living room built from simple primitives. The room never moves;
@@ -373,7 +375,30 @@ export class Room {
     this.occluders.push(chair);
   }
 
+  /**
+   * Big floor plant next to the stand. A CC0 Poly Haven model
+   * (`visual.room_plant_model`) replaces the procedural placeholder once loaded.
+   */
   private buildBigPlant() {
+    const plant = new THREE.Group();
+    const placeholder = this.buildPlaceholderPlant();
+    plant.add(placeholder);
+    plant.position.set(2.35, 0, -1.4);
+    this.group.add(plant);
+    this.occluders.push(plant);
+    const visual = gameConfig.visual as { room_plant_model?: string; room_plant_height?: number };
+    if (!visual.room_plant_model) return;
+    loadRoomModel(visual.room_plant_model, visual.room_plant_height ?? 1.5)
+      .then((model) => {
+        plant.remove(placeholder);
+        model.rotation.y = 0.6;
+        plant.add(model);
+        this.fade.delete(plant);
+      })
+      .catch(() => {});
+  }
+
+  private buildPlaceholderPlant() {
     const plant = new THREE.Group();
     const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.42, 16), new THREE.MeshStandardMaterial({ color: '#b99a6b', roughness: 0.9 }));
     pot.position.y = 0.21;
@@ -398,9 +423,7 @@ export class Room {
       plant.add(pivot);
     }
     plant.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = true; });
-    plant.position.set(2.35, 0, -1.4);
-    this.group.add(plant);
-    this.occluders.push(plant);
+    return plant;
   }
 
   private buildLamp() {
