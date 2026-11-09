@@ -1,4 +1,4 @@
-import { volumeLiters, type PlayerState, type Species, type StaticData, type Tank, type TankTier } from '../game/types';
+import { feedsToGrow, maxFishSize, volumeLiters, type PlayerState, type Resident, type Species, type StaticData, type Tank, type TankTier } from '../game/types';
 
 const svg = (path: string) =>
   `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
@@ -92,6 +92,7 @@ export class Hud {
             <button role="tab" data-act="tab" data-tab="tank" aria-selected="false">Bể</button>
           </div>
           <div data-panel="fish">
+            <div class="residents" data-ref="residents" hidden></div>
             <p data-ref="fishcap"></p>
             <div class="shop-list" data-ref="fishlist"></div>
           </div>
@@ -142,7 +143,7 @@ export class Hud {
     </div>`;
   }
 
-  render(state: PlayerState, shownTier: TankTier, preview: boolean, tank: Tank | null, inTank: Species[]) {
+  render(state: PlayerState, shownTier: TankTier, preview: boolean, tank: Tank | null, inTank: Species[], residents: Resident[] = []) {
     const p = state.profile;
     const fishCount = inTank.filter((s) => s.kind !== 'invert').length;
     const invertCount = inTank.length - fishCount;
@@ -186,6 +187,37 @@ export class Hud {
     }
     this.renderShop(state, currentTier);
     this.renderFishShop(state, currentTier, fishCount, inTank);
+    this.renderResidents(residents, currentTier, state);
+  }
+
+  /** Fish in the tank with their size in fingers and progress to the next size. */
+  private renderResidents(residents: Resident[], tier: TankTier, state: PlayerState) {
+    const box = this.$('[data-ref=residents]');
+    const sized = residents.filter((r) => r.sizeFingers != null);
+    box.hidden = !sized.length;
+    if (!sized.length) return;
+    const growth = new Map(state.fish.map((f) => [f.id, f.growth ?? 0]));
+    const s = this.data.settings;
+    const rows = sized.map((r) => {
+      const size = r.sizeFingers!;
+      const max = maxFishSize(r.species, tier, s);
+      const capped = size >= max;
+      const need = feedsToGrow(size, s);
+      const have = Math.min(need, growth.get(r.key) ?? 0);
+      const note = capped
+        ? (max < Math.floor(r.species.adult_length_cm / (s.finger_cm || 2)) ? 'Tối đa của bể này, nâng cấp bể để lớn tiếp' : 'Đã trưởng thành')
+        : `${have}/${need} bữa ăn để lên ${size + 1} ngón`;
+      const pct = capped ? 100 : (have / need) * 100;
+      return `<div class="resident ${capped ? 'capped' : ''}">
+        <span class="swatch" style="background:${r.species.body_color}"></span>
+        <div class="resident-text">
+          <span><b>${r.species.display_name ?? r.species.common_name}</b> · ${size} ngón <small>(${size * (s.finger_cm || 2)} cm, tối đa ${max})</small></span>
+          <div class="grow-track" role="progressbar" aria-label="Lớn lên" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}"><span style="width:${pct}%"></span></div>
+          <small>${note}</small>
+        </div>
+      </div>`;
+    });
+    box.innerHTML = `<h3>Cá trong bể</h3><p class="hint">Cá lớn khi được cho ăn lúc đói và khỏe (sức khỏe từ ${s.growth_min_health ?? 50}%).</p>${rows.join('')}`;
   }
 
   /** What the shop can offer for `tier` given the player's current tank, level and coins. */
@@ -241,11 +273,13 @@ export class Hud {
         const o = this.fishOffer(sp, current, state, fishCount, same);
         const cap = sp.max_per_tank != null ? ` · ${same}/${sp.max_per_tank} trong bể` : '';
         const min = this.data.tiers.find((t) => t.id === sp.min_tier);
+        const sized = current.max_size_fingers != null && sp.kind !== 'invert';
+        const sizeNote = sized ? ` · bán size 1 ngón, lớn tới ${maxFishSize(sp, current, this.data.settings)} ngón ở bể này` : '';
         const action = o.kind === 'buy'
           ? `<button class="btn buy" data-act="buy-fish" data-species="${sp.id}">Mua</button>`
           : `<span class="tag ${o.kind === 'level' ? 'locked' : ''}">${o.kind === 'level' ? ICONS.lock + ' ' : ''}${o.text}</span>`;
         return `<div class="shop-row fish ${o.kind}">
-          <div class="shop-size"><span><span class="swatch" style="background:${sp.body_color}"></span><b>${sp.display_name ?? sp.common_name}</b></span><small><i>${sp.scientific_name}</i> · ${sp.adult_length_cm} cm${sp.kind === 'invert' ? ' · không tính chỗ cá' : ''}${cap}</small></div>
+          <div class="shop-size"><span><span class="swatch" style="background:${sp.body_color}"></span><b>${sp.display_name ?? sp.common_name}</b></span><small><i>${sp.scientific_name}</i> · ${sp.adult_length_cm} cm${sp.kind === 'invert' ? ' · không tính chỗ cá' : ''}${cap}${sizeNote}</small></div>
           <div class="shop-meta"><span>Cấp ${sp.unlock_level} · bể từ ${min?.label ?? ''}</span><span class="price">${ICONS.coin}${fmt.format(sp.price_coins)}</span></div>
           <div class="shop-act">${action}</div>
         </div>`;

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Species, TankTier } from '../game/types';
+import type { Resident, Species, TankTier } from '../game/types';
 import { Fish, fishLengthM } from './fish';
 import { avoidance, resolveOverlaps, resolveRocks, rockAvoidance } from './avoid';
 import { RockField } from './rockfield';
@@ -28,6 +28,7 @@ export class Tank {
   readonly group = new THREE.Group();
   readonly size: THREE.Vector3; // inner size in metres (x=length, y=height, z=depth)
   readonly fish: Fish[] = [];
+  private residentKeys = '';
   readonly inverts: Starfish[] = [];
   private avoid: THREE.Vector3[] = [];
   /** Rock height map for fish; rebuilt lazily whenever the rock layout changes. */
@@ -225,18 +226,30 @@ export class Tank {
     this.waterFx.setLook(look);
   }
 
-  setFish(all: Species[]) {
+  /**
+   * Show these residents. When the same fish are already swimming (e.g. after feeding) they
+   * keep their places and only ease to their new size; `rebuild` forces fresh meshes
+   * (a GLB just loaded).
+   */
+  setFish(all: Resident[], rebuild = false) {
+    const minCm = Math.min(this.tier.length_cm, this.tier.depth_cm, this.tier.height_cm);
+    const swimmers = all.filter((r) => r.species.kind !== 'invert');
+    const keys = all.map((r) => r.key).join('|');
+    if (!rebuild && keys === this.residentKeys && swimmers.length === this.fish.length) {
+      swimmers.forEach((r, i) => this.fish[i].setLength(fishLengthM(r.species, minCm, r.lengthCm)));
+      return;
+    }
+    this.residentKeys = keys;
     for (const f of this.fish) {
       this.group.remove(f.group);
       f.dispose();
     }
     this.fish.length = 0;
-    const minCm = Math.min(this.tier.length_cm, this.tier.depth_cm, this.tier.height_cm);
-    this.setInverts(all.filter((s) => s.kind === 'invert'), minCm);
-    const speciesList = all.filter((s) => s.kind !== 'invert');
-    for (const s of speciesList) {
+    this.setInverts(all.filter((r) => r.species.kind === 'invert').map((r) => r.species), minCm);
+    for (const r of swimmers) {
+      const s = r.species;
       const model = s.model_url ? cachedFishModel(s.model_url, s.model_forward as Axis) : null;
-      const f = new Fish(s, fishLengthM(s, minCm), model);
+      const f = new Fish(s, fishLengthM(s, minCm, r.lengthCm), model);
       f.floorAt = (x, z, r) => this.rockField.heightNear(x, z, r) - this.swimCentreY();
       f.setGlow(this.look);
       const half = this.halfInner();

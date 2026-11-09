@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import type { Species, TankTier } from '../game/types';
+import type { Resident, Species, TankTier } from '../game/types';
 import { Room, ROOM } from './room';
 import { Tank, standHeightFor } from './tank';
 import { lookFor, loadLightMix, saveLightMix } from './look';
@@ -75,7 +75,7 @@ export class World {
   readonly room = new Room();
   private tank: Tank | null = null;
   private tier: TankTier | null = null;
-  private shownFish: Species[] = [];
+  private shownFish: Resident[] = [];
   private ghost = false;
   private goal: Framing | null = null;
   private lookAt = new THREE.Vector3();
@@ -130,7 +130,7 @@ export class World {
   }
 
   /** Show a tier. `ghost` = locked preview (outline only, no water or fish). */
-  show(tier: TankTier, fish: Species[], ghost: boolean, instant = false) {
+  show(tier: TankTier, fish: Resident[], ghost: boolean, instant = false) {
     const sameTier = this.tier?.id === tier.id;
     if (!sameTier) {
       if (this.tank) {
@@ -188,7 +188,7 @@ export class World {
       if (!s.model_url) continue;
       const load = s.kind === 'invert' ? loadInvertModel(s.model_url) : loadFishModel(s.model_url, s.model_forward as Axis);
       load.then(() => {
-        if (this.tank && !this.ghost && this.shownFish.some((f) => f.id === s.id)) this.tank.setFish(this.shownFish);
+        if (this.tank && !this.ghost && this.shownFish.some((f) => f.species.id === s.id)) this.tank.setFish(this.shownFish, true);
       }, () => {});
     }
   }

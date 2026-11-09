@@ -45,6 +45,8 @@ Camera framing (`framingFor` in `src/scene/world.ts`) and the stand size are der
 
 Fish shop (2026-11-08, proposed to Andy): each species has `display_name`, `unlock_level`, `price_coins`, `min_tier` (smallest tank, based on real adult size). Per-tank limit is `tank_tiers.max_fish`. Decor rocks are 5 CC0 Poly Haven GLBs (`visual.rock_models`). The big room floor plant is the CC0 Poly Haven `potted_plant_01` (2026-11-09, Andy wanted a more natural plant): `visual.room_plant_model` + `room_plant_height` (m); the procedural plant in `room.ts` is only the fallback while it loads. The armchair was replaced the same day by the ornate CC0 Poly Haven `sofa_03` (Andy: more impressive): `visual.room_sofa_model`, `room_sofa_height`, `room_sofa_pos` [x, z], `room_sofa_yaw`.
 
+Fish size (2026-11-09, Andy, numbers proposed): sizes are in "fingers" (`settings.finger_cm` = 2 cm). The shop sells every fish at **1 finger**; fish grow one finger after `growth_feeds_base + growth_feeds_step × (size − 1)` rewarded feedings (3, 5, 7… — only feeds that pay XP, and only while health ≥ `growth_min_health`). Growth is capped by `tank_tiers.max_size_fingers` (30/35 → 2, 40/45 → 3, 50/55 → 4, 60 → 5, 1 × 2 m → 15) and by the species' adult length; capped fish resume after a tank upgrade. Stored in `tank_fish.size_fingers` / `growth`, updated only by `feed_tank` (`private.grow_fish`). Fish that existed before sizes were set to their tank's cap. Inverts do not grow. The fish shop tab lists "Cá trong bể" with size and progress.
+
 Invertebrates (2026-11-08, Andy: sold in the shop, not free decor): `species.kind` = `fish` | `invert`, plus optional `max_per_tank`. Inverts (first one: red starfish *Fromia milleporella*, 6 per tank) do not use `max_fish` slots; `buy_fish` enforces `max_per_tank` (`species_limit`). They start on rock tops or sand (`Tank.placeInverts`), then crawl slowly (2026-11-09, Andy) over sand and rock tops, now and then climb one of the four glass panes, rest there and come back down (`src/scene/starfish.ts`, speed `visual.starfish_speed` in diameters/s; client-only display, not saved). Until a GLB is set in `model_url` they use a procedural star mesh.
 
 Assets (later phases):
@@ -69,7 +71,7 @@ Assets (later phases):
 |---|---|
 | `get_state()` | creates profile + starter tank on first call, ticks all tanks, returns full state |
 | `upgrade_tank(p_tier_id)` | shop purchase: target must be bigger than the current tank, `level >= unlock_level`, `coins >= unlock_cost_coins`; deducts coins and changes the tank's tier in place (fish/meters kept). `unlock_tank`/`select_tank` are no longer executable by players (one-tank model). |
-| `feed_tank(p_tank_id)` | +food; XP/coins only if food was below `feed_reward_below` (anti-spam) |
+| `feed_tank(p_tank_id)` | +food; XP/coins only if food was below `feed_reward_below` (anti-spam); the same rewarded feeds grow fish (`private.grow_fish`) when health ≥ `growth_min_health` |
 | `change_water(p_tank_id)` | cleanliness = 100; XP/coins only if it was below `water_reward_below` |
 | `buy_fish(p_species_id)` | fish shop: `level >= species.unlock_level`, tank at least `species.min_tier`, fewer than `tier.max_fish` fish (kind `fish` only), fewer than `max_per_tank` of that species when set (always for `invert`), `coins >= price_coins`; adds it to the player's tank |
 

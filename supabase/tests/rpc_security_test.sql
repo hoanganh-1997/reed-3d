@@ -122,6 +122,60 @@ begin
 end $$;
 reset role;
 
+-- ---------------------------------------------------------------- fish size
+-- Starter fish start at 1 finger. Only rewarded feedings grow them (2 so far); the third
+-- grows them to 2 fingers, the cube30 cap, where they stop.
+do $$
+begin
+  if exists (select 1 from public.tank_fish where user_id = '11111111-1111-1111-1111-111111111111' and (size_fingers <> 1 or growth <> 2)) then
+    raise exception 'expected size 1 growth 2: %', (select jsonb_agg(to_jsonb(f)) from public.tank_fish f);
+  end if;
+end $$;
+update public.tanks set food = 10 where user_id = :alice;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :alice, false);
+select pg_temp.expect_error('update public.tank_fish set size_fingers = 9', '%permission denied%');
+do $$
+declare s jsonb := public.feed_tank((select id from public.tanks limit 1));
+begin
+  if (s #>> '{fish,0,size_fingers}')::int <> 2 or (s #>> '{fish,0,growth}')::int <> 0 then raise exception 'fish should grow to 2: %', s -> 'fish'; end if;
+  raise notice 'ok fish grew to 2 fingers';
+end $$;
+reset role;
+update public.tanks set food = 10 where user_id = :alice;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :alice, false);
+do $$
+declare s jsonb := public.feed_tank((select id from public.tanks limit 1));
+begin
+  if (s #>> '{fish,0,size_fingers}')::int <> 2 or (s #>> '{fish,0,growth}')::int <> 0 then raise exception 'cube30 caps fish at 2: %', s -> 'fish'; end if;
+  raise notice 'ok cube30 caps fish at 2 fingers';
+end $$;
+reset role;
+-- Bigger tank: growth resumes, but not while the fish are unhealthy.
+update public.tanks set tier_id = 'cube40', food = 10, health = 20 where user_id = :alice;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :alice, false);
+do $$
+declare s jsonb := public.feed_tank((select id from public.tanks limit 1));
+begin
+  if (s #>> '{fish,0,growth}')::int <> 0 then raise exception 'sick fish must not grow: %', s -> 'fish'; end if;
+  raise notice 'ok no growth below growth_min_health';
+end $$;
+reset role;
+update public.tanks set food = 10, health = 100 where user_id = :alice;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :alice, false);
+do $$
+declare s jsonb := public.feed_tank((select id from public.tanks limit 1));
+begin
+  if (s #>> '{fish,0,growth}')::int <> 1 then raise exception 'growth should resume in cube40: %', s -> 'fish'; end if;
+  raise notice 'ok growth resumes after upgrade';
+end $$;
+reset role;
+-- Put alice back as the rest of the script expects (cube30, sizes untouched otherwise).
+update public.tanks set tier_id = 'cube30' where user_id = :alice;
+
 -- ---------------------------------------------------------------- shop upgrade
 -- Give alice level 4 through the internal path (as the server would on level-up).
 select private.add_xp(:alice, 100 + 125 + 150 - 20, 0);
@@ -174,6 +228,7 @@ begin
   s := public.buy_fish('yellow_tang');
   if (s #>> '{profile,coins}')::int <> 1000 - (select price_coins from public.species where id = 'yellow_tang') then raise exception 'fish price not deducted: %', s #>> '{profile,coins}'; end if;
   if jsonb_array_length(s -> 'fish') <> 2 then raise exception 'fish not added: %', s -> 'fish'; end if;
+  if (s #>> '{fish,1,size_fingers}')::int <> 1 or (s #>> '{fish,1,growth}')::int <> 0 then raise exception 'shop fish must start at 1 finger: %', s -> 'fish'; end if;
   raise notice 'ok buy_fish';
 end $$;
 select pg_temp.expect_error($q$select public.buy_fish('yellow_tang')$q$, '%tank_full%');
