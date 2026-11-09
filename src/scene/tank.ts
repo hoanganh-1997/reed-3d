@@ -2,12 +2,14 @@ import * as THREE from 'three';
 import type { Species, TankTier } from '../game/types';
 import { Fish, fishLengthM } from './fish';
 import { cachedFishModel, cachedInvertModel, loadRockModel, type Axis } from './models';
-import { Starfish, starfishDiameterM } from './starfish';
+import { Starfish, starfishDiameterM, type Seabed } from './starfish';
 import gameConfig from '../../config/game.json';
 import type { Look } from './look';
 import { WaterFx, waveAmplitude, waveHeight } from './water';
 
 const ROCK_MODELS: string[] = gameConfig.visual.rock_models ?? [];
+/** Starfish crawl speed in body diameters per second. */
+const STARFISH_SPEED: number = (gameConfig.visual as { starfish_speed?: number }).starfish_speed ?? 0.12;
 
 /** Height of the stand top for a tier (metres). Large tanks sit on a lower stand. */
 export function standHeightFor(tier: TankTier) {
@@ -50,6 +52,13 @@ export class Tank {
     const H = tier.height_cm / 100;
     const D = tier.depth_cm / 100;
     this.size = new THREE.Vector3(L, H, D);
+    this.bed = {
+      ground: (x, z) => this.groundAt(x, z),
+      halfX: L / 2 - 0.001,
+      halfZ: D / 2 - 0.001,
+      floorY: Math.max(0.015, H * 0.08),
+      waterY: H * 0.93,
+    };
 
     // Glass panes
     const glassMat = this.track(new THREE.MeshPhysicalMaterial({
@@ -236,7 +245,7 @@ export class Tank {
       const n = seen.get(sp.id) ?? 0;
       seen.set(sp.id, n + 1);
       const model = sp.model_url ? cachedInvertModel(sp.model_url) : null;
-      const star = new Starfish(sp, starfishDiameterM(sp, minCm), model, hashSeed(sp.id) + n * 7919);
+      const star = new Starfish(sp, starfishDiameterM(sp, minCm), model, hashSeed(sp.id) + n * 7919, STARFISH_SPEED);
       star.group.userData.slot = this.inverts.length;
       this.inverts.push(star);
       this.invertGroup.add(star.group);
@@ -292,6 +301,20 @@ export class Tank {
     }
   }
 
+  private bedRay = new THREE.Raycaster();
+  private bed!: Seabed;
+
+  private groundAt(x: number, z: number) {
+    const from = this.group.localToWorld(new THREE.Vector3(x, this.size.y, z));
+    this.bedRay.set(from, new THREE.Vector3(0, -1, 0));
+    const hit = this.bedRay.intersectObjects([this.rocks, this.sand], true)[0];
+    if (!hit || !hit.face) return null;
+    return {
+      point: this.group.worldToLocal(hit.point.clone()),
+      normal: hit.face.normal.clone().transformDirection(hit.object.matrixWorld),
+    };
+  }
+
   /** Half extents of the swimmable volume, relative to its centre. */
   private halfInner() {
     const sandH = Math.max(0.015, this.size.y * 0.08);
@@ -342,6 +365,11 @@ export class Tank {
         this.pellets = this.pellets.filter((p) => p !== nearest);
       }
       f.group.position.y += cy;
+    }
+
+    if (this.inverts.length) {
+      this.group.updateMatrixWorld();
+      for (const star of this.inverts) star.update(dt, this.bed);
     }
 
     // Surface ripples (plane local y maps to tank -z after the -90° X rotation).
