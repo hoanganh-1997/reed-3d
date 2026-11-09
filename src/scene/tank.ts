@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import type { Species, TankTier } from '../game/types';
 import { Fish, fishLengthM } from './fish';
-import { avoidance, resolveOverlaps } from './avoid';
+import { avoidance, resolveOverlaps, resolveRocks, rockAvoidance } from './avoid';
+import { RockField } from './rockfield';
 import { cachedFishModel, cachedInvertModel, loadRockModel, type Axis } from './models';
 import { Starfish, starfishDiameterM, type Seabed } from './starfish';
 import gameConfig from '../../config/game.json';
@@ -29,6 +30,9 @@ export class Tank {
   readonly fish: Fish[] = [];
   readonly inverts: Starfish[] = [];
   private avoid: THREE.Vector3[] = [];
+  /** Rock height map for fish; rebuilt lazily whenever the rock layout changes. */
+  private rockField!: RockField;
+  private rockFieldDirty = true;
   private invertGroup = new THREE.Group();
   private rocks = new THREE.Group();
   private sand!: THREE.Mesh;
@@ -61,6 +65,7 @@ export class Tank {
       floorY: Math.max(0.015, H * 0.08),
       waterY: H * 0.93,
     };
+    this.rockField = new RockField(L / 2, D / 2, Math.max(0.006, Math.min(L, D) / 40), this.bed.floorY);
 
     // Glass panes
     const glassMat = this.track(new THREE.MeshPhysicalMaterial({
@@ -144,6 +149,7 @@ export class Tank {
           rock.position.set(at.x, sandH - size * 0.04, at.z);
           rocks.remove(m);
           rocks.add(rock);
+          this.rockFieldDirty = true;
           this.placeInverts();
         }, () => {});
       }
@@ -226,6 +232,7 @@ export class Tank {
     for (const s of speciesList) {
       const model = s.model_url ? cachedFishModel(s.model_url, s.model_forward as Axis) : null;
       const f = new Fish(s, fishLengthM(s, minCm), model);
+      f.floorAt = (x, z, r) => this.rockField.heightNear(x, z, r) - this.swimCentreY();
       f.setGlow(this.look);
       const half = this.halfInner();
       // Spawn away from fish already placed (best of a few random tries).
@@ -314,6 +321,19 @@ export class Tank {
   private bedRay = new THREE.Raycaster();
   private bed!: Seabed;
 
+  /** Top of the rock work at (x, z), tank-local; null over bare sand. */
+  private rockTopAt(x: number, z: number) {
+    const from = this.group.localToWorld(new THREE.Vector3(x, this.size.y, z));
+    this.bedRay.set(from, new THREE.Vector3(0, -1, 0));
+    const hit = this.bedRay.intersectObject(this.rocks, true)[0];
+    return hit ? this.group.worldToLocal(hit.point.clone()).y : null;
+  }
+
+  /** Sinking food comes to rest on the sand or on top of a rock. */
+  private pelletFloor(m: THREE.Mesh) {
+    return Math.max(this.size.y * 0.09, this.rockField.heightNear(m.position.x, m.position.z, 0) + this.size.x * 0.008);
+  }
+
   private groundAt(x: number, z: number) {
     const from = this.group.localToWorld(new THREE.Vector3(x, this.size.y, z));
     this.bedRay.set(from, new THREE.Vector3(0, -1, 0));
@@ -355,13 +375,21 @@ export class Tank {
     // Pellets sink slowly
     for (const p of this.pellets) {
       p.vy = Math.max(-0.035, p.vy - dt * 0.05);
-      p.mesh.position.y = Math.max(this.size.y * 0.09, p.mesh.position.y + p.vy * dt);
+      p.mesh.position.y = Math.max(this.pelletFloor(p.mesh), p.mesh.position.y + p.vy * dt);
+    }
+
+    if (this.rockFieldDirty) {
+      this.rockFieldDirty = false;
+      this.group.updateMatrixWorld(true);
+      this.rockField.build((x, z) => this.rockTopAt(x, z));
+      for (const p of this.pellets) p.mesh.position.y = Math.max(p.mesh.position.y, this.pelletFloor(p.mesh));
     }
 
     // Fish positions are kept relative to the swim-volume centre while simulating.
     for (const f of this.fish) f.group.position.y -= cy;
     while (this.avoid.length < this.fish.length) this.avoid.push(new THREE.Vector3());
     avoidance(this.fish, this.avoid);
+    rockAvoidance(this.fish, this.rockField, cy, this.avoid);
     this.fish.forEach((f, i) => {
       let foodLocal: THREE.Vector3 | null = null;
       let nearest: { mesh: THREE.Mesh } | null = null;
@@ -378,7 +406,12 @@ export class Tank {
       }
     });
     // Bodies never pass through each other, even when crowding at food.
-    resolveOverlaps(this.fish, half);
+    // ...and never through rocks. Lifting a fish off a rock can push it into a
+    // neighbour, so alternate the two constraints; rocks get the last word.
+    for (let k = 0; k < 3; k++) {
+      resolveOverlaps(this.fish, half);
+      resolveRocks(this.fish, this.rockField, cy);
+    }
     for (const f of this.fish) f.group.position.y += cy;
 
     if (this.inverts.length) {

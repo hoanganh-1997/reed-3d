@@ -23,7 +23,7 @@ Language: talk to the owner (Andy) in Vietnamese; code, identifiers, comments an
 - Tank viewing mode (2026-11-08, Andy): the eye button in the top bar hides the HUD and the whole room (walls, furniture, stand), frames only the tank on a dark background with a soft fill light; orbit and zoom still work. Exit with the "Thoát chế độ ngắm" button or Esc.
 - Client: **Three.js + TypeScript + Vite**, HUD in plain DOM/CSS (no UI framework yet).
 - Swimming: vertex-shader body wave (`applySwimWave`), no skeleton rig. Fish local axes: +X head, +Y up, Z lateral.
-- Fish never swim through each other (2026-11-09, Andy): each fish is a capsule along its heading (`Fish.radius`/`halfSpan`); soft look-ahead steering turns them away early and a hard overlap pass after moving keeps bodies apart even when crowding at food (`src/scene/avoid.ts`).
+- Fish never swim through each other (2026-11-09, Andy): each fish is a capsule along its heading (`Fish.radius`/`halfSpan`); soft look-ahead steering turns them away early and a hard overlap pass after moving keeps bodies apart even when crowding at food (`src/scene/avoid.ts`). Fish also never swim through rocks: a rock height map (`src/scene/rockfield.ts`, rebuilt when rock models load) lifts them early over rock work and a hard pass keeps every body point above it; wander targets and sinking food rest above rock tops.
 
 ## Proposed, changeable (lives in config, never hard-coded)
 
