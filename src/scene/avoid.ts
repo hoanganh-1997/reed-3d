@@ -164,3 +164,54 @@ export function minGap(fish: Fish[]) {
   }
   return best;
 }
+
+/**
+ * Rocks. Fish are kept above the rock height map (RockField): soft steering
+ * lifts them early when the path ahead rises, and a hard pass after moving
+ * raises any body point (head, centre, tail) that would dip into a rock.
+ * `yOff` converts tank-local heights into the swim frame (fish y + yOff = tank y).
+ */
+export interface Ground {
+  heightNear(x: number, z: number, r: number): number;
+}
+
+const _pt = new THREE.Vector3();
+
+/** Highest ground (swim frame) under the fish body placed at `centre`. */
+function floorUnder(f: Fish, centre: THREE.Vector3, h: THREE.Vector3, ground: Ground, yOff: number) {
+  let need = -Infinity;
+  for (const s of [1, 0, -1]) {
+    _pt.copy(centre).addScaledVector(h, f.halfSpan * s);
+    const top = ground.heightNear(_pt.x, _pt.z, f.radius * 0.8) - yOff;
+    // How far this body point must rise so its capsule clears the rock.
+    need = Math.max(need, top + f.radius - _pt.y);
+  }
+  return need;
+}
+
+export function rockAvoidance(fish: Fish[], ground: Ground, yOff: number, out: THREE.Vector3[]) {
+  fish.forEach((f, i) => {
+    heading(f, _ha);
+    _pa.copy(f.group.position).addScaledVector(f.velocity, 0.6);
+    const clearance = f.length * 0.35;
+    const need = floorUnder(f, _pa, _ha, ground, yOff) + clearance;
+    if (need > 0) out[i].y += Math.min(2, need / (f.length * 0.5));
+  });
+}
+
+export function resolveRocks(fish: Fish[], ground: Ground, yOff: number) {
+  for (const f of fish) {
+    const need = floorUnder(f, f.group.position, heading(f, _ha), ground, yOff);
+    if (need > 0) {
+      f.group.position.y += need;
+      if (f.velocity.y < 0) f.velocity.y = 0;
+    }
+  }
+}
+
+/** Deepest rock penetration among all fish (metres, ≤0 = clear). Debug / tests. */
+export function maxRockDepth(fish: Fish[], ground: Ground, yOff: number) {
+  let worst = -Infinity;
+  for (const f of fish) worst = Math.max(worst, floorUnder(f, f.group.position, heading(f, _ha), ground, yOff));
+  return worst;
+}

@@ -286,7 +286,15 @@ export class Fish {
       THREE.MathUtils.randFloatSpread(2 * limit.y),
       THREE.MathUtils.randFloatSpread(2 * limit.z),
     );
+    // Never aim into a rock: lift the target above the rock top under it.
+    if (this.floorAt) {
+      const floor = this.floorAt(this.target.x, this.target.z, this.radius + this.halfSpan) + this.radius + this.length * 0.35;
+      this.target.y = Math.min(limit.y, Math.max(this.target.y, floor));
+    }
   }
+
+  /** Ground height in the swim frame (rock tops), set by the tank. */
+  floorAt: ((x: number, z: number, r: number) => number) | null = null;
 
   dispose() {
     if (!this.sharedGeometry) {
