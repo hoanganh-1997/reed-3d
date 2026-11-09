@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Species, TankTier } from '../game/types';
 import { Fish, fishLengthM } from './fish';
+import { avoidance, resolveOverlaps } from './avoid';
 import { cachedFishModel, cachedInvertModel, loadRockModel, type Axis } from './models';
 import { Starfish, starfishDiameterM, type Seabed } from './starfish';
 import gameConfig from '../../config/game.json';
@@ -27,6 +28,7 @@ export class Tank {
   readonly size: THREE.Vector3; // inner size in metres (x=length, y=height, z=depth)
   readonly fish: Fish[] = [];
   readonly inverts: Starfish[] = [];
+  private avoid: THREE.Vector3[] = [];
   private invertGroup = new THREE.Group();
   private rocks = new THREE.Group();
   private sand!: THREE.Mesh;
@@ -226,8 +228,16 @@ export class Tank {
       const f = new Fish(s, fishLengthM(s, minCm), model);
       f.setGlow(this.look);
       const half = this.halfInner();
-      f.pickTarget(half.clone().multiplyScalar(0.6));
-      f.group.position.copy(f.target).setY(f.target.y + this.swimCentreY());
+      // Spawn away from fish already placed (best of a few random tries).
+      const spot = new THREE.Vector3();
+      let bestGap = -Infinity;
+      for (let k = 0; k < 24; k++) {
+        f.pickTarget(half.clone().multiplyScalar(0.6));
+        const gapNow = Math.min(Infinity, ...this.fish.map((o) => o.group.position.clone().setY(o.group.position.y - this.swimCentreY()).distanceTo(f.target) - o.radius - f.radius - Math.max(o.halfSpan, f.halfSpan)));
+        if (gapNow > bestGap) { bestGap = gapNow; spot.copy(f.target); }
+        if (gapNow > f.length) break;
+      }
+      f.group.position.copy(spot).setY(spot.y + this.swimCentreY());
       f.pickTarget(half.clone().multiplyScalar(0.6));
       this.fish.push(f);
       this.group.add(f.group);
@@ -348,7 +358,11 @@ export class Tank {
       p.mesh.position.y = Math.max(this.size.y * 0.09, p.mesh.position.y + p.vy * dt);
     }
 
-    for (const f of this.fish) {
+    // Fish positions are kept relative to the swim-volume centre while simulating.
+    for (const f of this.fish) f.group.position.y -= cy;
+    while (this.avoid.length < this.fish.length) this.avoid.push(new THREE.Vector3());
+    avoidance(this.fish, this.avoid);
+    this.fish.forEach((f, i) => {
       let foodLocal: THREE.Vector3 | null = null;
       let nearest: { mesh: THREE.Mesh } | null = null;
       let best = Infinity;
@@ -357,15 +371,15 @@ export class Tank {
         if (d < best) { best = d; nearest = p; }
       }
       if (nearest) foodLocal = nearest.mesh.position.clone().setY(nearest.mesh.position.y - cy);
-      // Fish positions are kept relative to the swim-volume centre.
-      f.group.position.y -= cy;
-      f.update(dt, time, half, foodLocal);
-      if (nearest && foodLocal && f.group.position.distanceTo(foodLocal) < f.length * 0.35) {
+      f.update(dt, time, half, foodLocal, this.avoid[i]);
+      if (nearest && foodLocal && f.group.position.distanceTo(foodLocal) < f.length * 0.35 + f.radius) {
         this.group.remove(nearest.mesh);
         this.pellets = this.pellets.filter((p) => p !== nearest);
       }
-      f.group.position.y += cy;
-    }
+    });
+    // Bodies never pass through each other, even when crowding at food.
+    resolveOverlaps(this.fish, half);
+    for (const f of this.fish) f.group.position.y += cy;
 
     if (this.inverts.length) {
       this.group.updateMatrixWorld();
