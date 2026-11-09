@@ -44,7 +44,7 @@ Camera framing (`framingFor` in `src/scene/world.ts`) and the stand size are der
 
 Fish shop (2026-11-08, proposed to Andy): each species has `display_name`, `unlock_level`, `price_coins`, `min_tier` (smallest tank, based on real adult size). Per-tank limit is `tank_tiers.max_fish`. Decor rocks are 5 CC0 Poly Haven GLBs (`visual.rock_models`).
 
-Invertebrates (2026-11-08, Andy: sold in the shop, not free decor): `species.kind` = `fish` | `invert`, plus optional `max_per_tank`. Inverts (first one: red starfish *Fromia milleporella*, 6 per tank) do not use `max_fish` slots; `buy_fish` enforces `max_per_tank` (`species_limit`). They rest on rock tops or sand (`src/scene/starfish.ts`, placed by raycast in `Tank.placeInverts`). Until a GLB is set in `model_url` they use a procedural star mesh.
+Invertebrates (2026-11-08, Andy: sold in the shop, not free decor): `species.kind` = `fish` | `invert`, plus optional `max_per_tank`. Inverts (first one: red starfish *Fromia milleporella*, 6 per tank) do not use `max_fish` slots; `buy_fish` enforces `max_per_tank` (`species_limit`). They start on rock tops or sand (`Tank.placeInverts`), then crawl slowly (2026-11-09, Andy) over sand and rock tops, now and then climb one of the four glass panes, rest there and come back down (`src/scene/starfish.ts`, speed `visual.starfish_speed` in diameters/s; client-only display, not saved). Until a GLB is set in `model_url` they use a procedural star mesh.
 
 Assets (later phases):
 - Fish: GLB, ~500–3,000 tris, 1K textures, fins as flat alpha meshes.
