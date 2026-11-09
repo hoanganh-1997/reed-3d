@@ -132,3 +132,34 @@ export function loadInvertModel(url: string): Promise<THREE.Object3D> {
 export function cachedInvertModel(url: string) {
   return invertReady.get(url) ?? null;
 }
+
+/**
+ * Room prop GLBs (CC0, Poly Haven): scaled to `height` metres, origin at the
+ * bottom centre, shadows on. Each URL is loaded once.
+ */
+const roomCache = new Map<string, Promise<THREE.Object3D>>();
+export function loadRoomModel(url: string, height: number): Promise<THREE.Object3D> {
+  const key = url + '|' + height;
+  let p = roomCache.get(key);
+  if (!p) {
+    p = loader.loadAsync(url).then((gltf) => {
+      const root = gltf.scene;
+      root.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh) m.castShadow = m.receiveShadow = true;
+      });
+      root.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(root);
+      const c = box.getCenter(new THREE.Vector3());
+      const s = height / Math.max(1e-6, box.max.y - box.min.y);
+      const out = new THREE.Group();
+      root.position.set(-c.x, -box.min.y, -c.z);
+      out.add(root);
+      out.scale.setScalar(s);
+      return out;
+    });
+    p.catch((e) => console.warn('room model failed, keeping placeholder', url, e));
+    roomCache.set(key, p);
+  }
+  return p;
+}
