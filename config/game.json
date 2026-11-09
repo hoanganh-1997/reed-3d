@@ -227,6 +227,42 @@
       "price_coins": 150,
       "kind": "invert",
       "max_per_tank": 6
+    },
+    {
+      "starter": false,
+      "model_forward": "-x",
+      "kind": "fish",
+      "max_per_tank": null,
+      "id": "girdled_angel",
+      "common_name": "Blue girdled angelfish",
+      "scientific_name": "Pomacanthus navarchus",
+      "adult_length_cm": 25,
+      "min_tier": "cube50",
+      "body_color": "#f08a1c",
+      "fin_color": "#1f4fd6",
+      "accent_color": "#0b1f6a",
+      "model_url": "/models/girdled_angel.feaf0810a5.glb",
+      "display_name": "Thiên thần đai xanh",
+      "unlock_level": 16,
+      "price_coins": 450
+    },
+    {
+      "starter": false,
+      "model_forward": "-x",
+      "kind": "fish",
+      "max_per_tank": null,
+      "id": "blueface_angel",
+      "common_name": "Blueface angelfish",
+      "scientific_name": "Pomacanthus xanthometopon",
+      "adult_length_cm": 38,
+      "min_tier": "cube60",
+      "body_color": "#2a5fd0",
+      "fin_color": "#f2c418",
+      "accent_color": "#f2c418",
+      "model_url": "/models/blueface_angel.a428eb5265.glb",
+      "display_name": "Thiên thần mặt xanh",
+      "unlock_level": 24,
+      "price_coins": 650
     }
   ],
   "visual": {
